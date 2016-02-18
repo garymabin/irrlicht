@@ -390,24 +390,18 @@ void CBurningVideoDriver::setTransform(E_TRANSFORMATION_STATE state, const core:
 	}
 }
 
-
-//! clears the zbuffer
-bool CBurningVideoDriver::beginScene(bool backBuffer, bool zBuffer,
-		SColor color, const SExposedVideoData& videoData,
-		core::rect<s32>* sourceRect)
+bool CBurningVideoDriver::beginScene(u16 clearFlag, SColor clearColor, f32 clearDepth, u8 clearStencil, const SExposedVideoData& videoData, core::rect<s32>* sourceRect)
 {
-	CNullDriver::beginScene(backBuffer, zBuffer, color, videoData, sourceRect);
+	CNullDriver::beginScene(clearFlag, clearColor, clearDepth, clearStencil, videoData, sourceRect);
 	WindowId = videoData.D3D9.HWnd;
 	SceneSourceRect = sourceRect;
 
-	clearBuffers(backBuffer, zBuffer, false, color);
+	clearBuffers(clearFlag, clearColor, clearDepth, clearStencil);
 
 	memset ( TransformationFlag, 0, sizeof ( TransformationFlag ) );
 	return true;
 }
 
-
-//! presents the rendered scene on the screen, returns false if failed
 bool CBurningVideoDriver::endScene()
 {
 	CNullDriver::endScene();
@@ -415,10 +409,7 @@ bool CBurningVideoDriver::endScene()
 	return Presenter->present(BackBuffer, WindowId, SceneSourceRect);
 }
 
-
-//! set a render target
-bool CBurningVideoDriver::setRenderTarget(IRenderTarget* target, const core::array<u32>& activeTextureID, bool clearBackBuffer,
-	bool clearDepthBuffer, bool clearStencilBuffer, SColor clearColor)
+bool CBurningVideoDriver::setRenderTargetEx(IRenderTarget* target, u16 clearFlag, SColor clearColor, f32 clearDepth, u8 clearStencil)
 {
 	if (target && target->getDriverType() != EDT_BURNINGSVIDEO)
 	{
@@ -442,7 +433,7 @@ bool CBurningVideoDriver::setRenderTarget(IRenderTarget* target, const core::arr
 		setRenderTarget(BackBuffer);
 	}
 
-	clearBuffers(clearBackBuffer, clearDepthBuffer, clearStencilBuffer, clearColor);
+	clearBuffers(clearFlag, clearColor, clearDepth, clearStencil);
 
 	return true;
 }
@@ -1217,9 +1208,9 @@ REALINLINE void CBurningVideoDriver::VertexCache_get(const s4DVertex ** face)
 
 		// get the next unique vertices cache line
 		u32 fillIndex = 0;
-		u32 dIndex;
-		u32 i;
-		u32 sourceIndex;
+		u32 dIndex = 0;
+		u32 i = 0;
+		u32 sourceIndex = 0;
 
 		while ( VertexCache.indicesIndex < VertexCache.indexCount &&
 				fillIndex < VERTEXCACHE_ELEMENT
@@ -2236,26 +2227,16 @@ ITexture* CBurningVideoDriver::addRenderTargetTexture(const core::dimension2d<u3
 	return tex;
 }
 
-
-//! Clear the color, depth and/or stencil buffers.
-void CBurningVideoDriver::clearBuffers(bool backBuffer, bool depthBuffer, bool stencilBuffer, SColor color)
+void CBurningVideoDriver::clearBuffers(u16 flag, SColor color, f32 depth, u8 stencil)
 {
-	if (backBuffer && RenderTargetSurface)
+	if ((flag & ECBF_COLOR) && RenderTargetSurface)
 		RenderTargetSurface->fill(color);
 
-	if (depthBuffer && DepthBuffer)
+	if ((flag & ECBF_DEPTH) && DepthBuffer)
 		DepthBuffer->clear();
 
-	if (stencilBuffer && StencilBuffer)
+	if ((flag & ECBF_STENCIL) && StencilBuffer)
 		StencilBuffer->clear();
-}
-
-
-//! Clears the DepthBuffer.
-void CBurningVideoDriver::clearZBuffer()
-{
-	if (DepthBuffer)
-		DepthBuffer->clear();
 }
 
 
@@ -2275,16 +2256,12 @@ IImage* CBurningVideoDriver::createScreenShot(video::ECOLOR_FORMAT format, video
 		return 0;
 }
 
-
-//! returns a device dependent texture from a software surface (IImage)
-//! THIS METHOD HAS TO BE OVERRIDDEN BY DERIVED DRIVERS WITH OWN TEXTURES
-ITexture* CBurningVideoDriver::createDeviceDependentTexture(IImage* surface, const io::path& name, void* mipmapData)
+ITexture* CBurningVideoDriver::createDeviceDependentTexture(const io::path& name, IImage* image)
 {
-	return new CSoftwareTexture2(
-		surface, name,
-		(getTextureCreationFlag(ETCF_CREATE_MIP_MAPS) ? CSoftwareTexture2::GEN_MIPMAP : 0 ) |
-		(getTextureCreationFlag(ETCF_ALLOW_NON_POWER_2) ? 0 : CSoftwareTexture2::NP2_SIZE ), mipmapData);
+	CSoftwareTexture2* texture = new CSoftwareTexture2(image, name, (getTextureCreationFlag(ETCF_CREATE_MIP_MAPS) ? CSoftwareTexture2::GEN_MIPMAP : 0) |
+		(getTextureCreationFlag(ETCF_ALLOW_NON_POWER_2) ? 0 : CSoftwareTexture2::NP2_SIZE));
 
+	return texture;
 }
 
 
@@ -2374,7 +2351,7 @@ void CBurningVideoDriver::drawStencilShadow(bool clearStencilBuffer, video::SCol
 
 	for ( u32 y = 0; y < h; ++y )
 	{
-		dst = (tVideoSample*)RenderTargetSurface->lock() + ( y * w );
+		dst = (tVideoSample*)RenderTargetSurface->getData() + ( y * w );
 		stencil =  stencilBase + ( y * w );
 
 		for ( u32 x = 0; x < w; ++x )

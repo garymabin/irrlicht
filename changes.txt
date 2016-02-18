@@ -1,6 +1,23 @@
 --------------------------
 Changes in 1.9 (not yet released)
 
+- Randomizer now returns range 0..randMax as documented and no longer 1..randMax as it did before. randMax got reduced by 1.
+  Note: You will generally get different numbers than before! If you need the exact old calculations, please check the corresponding sources in Irrlicht 1.8 in os.cpp/.h
+- Resetting Randomizer with 0 or no longer breaks it (will be set to 1). Same for other numbers for which it wasn't defined.
+- Add SMaterialLayer::TextureWrapW for cubemap texture wrap mode at W axis.
+- Add cubemap texture support for D3D9 and OpenGL drivers.
+- Do no longer re-calculate md2 frames when they don't change (thx @npc for reporting)
+- Add multibyteToWString wrapper functions around mbstowcs which work with Irrlicht string class.
+- Fix: addFileArchive now grab()'s the archive when you pass one in by pointer.
+- Fix: Prevent division by 0 in CGUIScrollBar::setPos
+- Fix: Add missing serialization to CSceneNodeAnimatorCameraFPS and CSceneNodeAnimatorCameraMaya
+- Fix: File-open dialog now restores the original locale after modifying it internally
+- Fix first calculation of the camerascenenode boundingsphere.
+- Fix bug with ignored opening brace in .X files with DeclData section. Thx @Alin for bugreport and patch.
+- Fix problem with OpenGL textures cache.
+- Add clear buffer flags and marked some methods used for clear buffers as deprecated.
+- Fix: CGUIImage no longer scales wrong when working with textures which don't have the original image size.
+- Fix CSoftwareTexture2 calculation for OriginalSize of ITexture. It was returning the changed texture size instead of the original one before.
 - Fix skinned meshes not playing their last frame. Also clarified animation documentation to describe current behavior more exactly.
 - Add IWriteFile::flush interface (thx @ JLouisB for the patch).
 - CLightSceneNode::updateAbsolutePosition does now light recalculations. This is to fix using animators with lights.
@@ -113,9 +130,23 @@ Changes in 1.9 (not yet released)
 - added x64 to vs2008 project ( buildAllExamples_v9 ) [paths: obj64, win64-visualstudio]
 - burningvideo: getMaxTextureSize adjusted [ changed meaning of SOFTWARE_DRIVER_2_TEXTURE_MAXSIZE
 - burningvideo: mipmaplevel adjusted ( not that bad bokeh...(sometimes) )
---------------------------
-Changes in 1.8.2
 
+--------------------------
+Changes in 1.8.4
+ - Fix some compile warnings in aes which got handled as errors by some c++11 compilers.
+ - Get rid of some misleading-indentation warnings in gcc6
+ - Fix serialization of the InputReceiverEnabled flag in CCameraSceneNode
+ - Fix pasting text from X11 applications to Irrlicht. Thanks @est31 for the patch.
+ - Tests give now a warning when stabilizing screenshots failed. Aslo trying more often now (a hack as taking screenshots otherwise fails often in windowed mode on some systems).
+
+--------------------------
+Changes in 1.8.3 (13.9.2015)
+ - Fix the fix for compiling on GCC5 (thanks to est31 for report and patch)
+
+--------------------------
+Changes in 1.8.2 (30.8.2015)
+
+ - Add VS2013 project files
  - Fix compiling with IRR_LINUX_XCURSOR_
  - Fix compiling with NO_IRR_COMPILE_WITH_LIBJPEG_  (thx to anontypist for report and patch).
  - Fix compiling on GCC5 on MinGW (thanks to Slipxy for finding the bug and to osense for reporting it).

@@ -35,9 +35,9 @@ CCameraSceneNode::CCameraSceneNode(ISceneNode* parent, ISceneManager* mgr, s32 i
 	else
 		Aspect = 4.0f / 3.0f;	// Aspect ratio.
 
+	ViewArea.setFarNearDistance(ZFar - ZNear);
 	recalculateProjectionMatrix();
 	recalculateViewArea();
-	ViewArea.setFarNearDistance(ZFar - ZNear);
 }
 
 
@@ -337,7 +337,7 @@ void CCameraSceneNode::deserializeAttributes(io::IAttributes* in, io::SAttribute
 	ZFar = in->getAttributeAsFloat("ZFar");
 	TargetAndRotationAreBound = in->getAttributeAsBool("Binding");
 	if ( in->findAttribute("ReceiveInput") )
-		InputReceiverEnabled = in->getAttributeAsBool("InputReceiverEnabled");
+		InputReceiverEnabled = in->getAttributeAsBool("ReceiveInput");
 
 	recalculateProjectionMatrix();
 	recalculateViewArea();

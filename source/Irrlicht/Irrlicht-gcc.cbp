@@ -445,6 +445,7 @@
 		<Unit filename="..\..\include\IBoneSceneNode.h" />
 		<Unit filename="..\..\include\ICameraSceneNode.h" />
 		<Unit filename="..\..\include\IColladaMeshWriter.h" />
+		<Unit filename="..\..\include\IContextManager.h" />
 		<Unit filename="..\..\include\ICursorControl.h" />
 		<Unit filename="..\..\include\IDummyTransformationSceneNode.h" />
 		<Unit filename="..\..\include\IDynamicMeshBuffer.h" />
@@ -671,6 +672,8 @@
 		<Unit filename="CFileList.h" />
 		<Unit filename="CFileSystem.cpp" />
 		<Unit filename="CFileSystem.h" />
+		<Unit filename="CGLXManager.cpp" />
+		<Unit filename="CGLXManager.h" />
 		<Unit filename="CGUIButton.cpp" />
 		<Unit filename="CGUIButton.h" />
 		<Unit filename="CGUICheckBox.cpp" />
@@ -745,6 +748,8 @@
 		<Unit filename="CImageLoaderPPM.h" />
 		<Unit filename="CImageLoaderPSD.cpp" />
 		<Unit filename="CImageLoaderPSD.h" />
+		<Unit filename="CImageLoaderPVR.cpp" />
+		<Unit filename="CImageLoaderPVR.h" />
 		<Unit filename="CImageLoaderRGB.cpp" />
 		<Unit filename="CImageLoaderRGB.h" />
 		<Unit filename="CImageLoaderTGA.cpp" />
@@ -830,6 +835,8 @@
 		<Unit filename="COctreeTriangleSelector.h" />
 		<Unit filename="COgreMeshFileLoader.cpp" />
 		<Unit filename="COgreMeshFileLoader.h" />
+		<Unit filename="COpenGLCacheHandler.cpp" />
+		<Unit filename="COpenGLCacheHandler.h" />
 		<Unit filename="COpenGLDriver.cpp" />
 		<Unit filename="COpenGLDriver.h" />
 		<Unit filename="COpenGLExtensionHandler.cpp" />
@@ -839,14 +846,10 @@
 		<Unit filename="COpenGLNormalMapRenderer.h" />
 		<Unit filename="COpenGLParallaxMapRenderer.cpp" />
 		<Unit filename="COpenGLParallaxMapRenderer.h" />
-		<Unit filename="COpenGLRenderTarget.cpp" />
-		<Unit filename="COpenGLRenderTarget.h" />
 		<Unit filename="COpenGLSLMaterialRenderer.cpp" />
 		<Unit filename="COpenGLSLMaterialRenderer.h" />
 		<Unit filename="COpenGLShaderMaterialRenderer.cpp" />
 		<Unit filename="COpenGLShaderMaterialRenderer.h" />
-		<Unit filename="COpenGLTexture.cpp" />
-		<Unit filename="COpenGLTexture.h" />
 		<Unit filename="CPLYMeshFileLoader.cpp" />
 		<Unit filename="CPLYMeshFileLoader.h" />
 		<Unit filename="CPLYMeshWriter.cpp" />
@@ -988,6 +991,8 @@
 		<Unit filename="CWADReader.h" />
 		<Unit filename="CWaterSurfaceSceneNode.cpp" />
 		<Unit filename="CWaterSurfaceSceneNode.h" />
+		<Unit filename="CWGLManager.cpp" />
+		<Unit filename="CWGLManager.h" />
 		<Unit filename="CWriteFile.cpp" />
 		<Unit filename="CWriteFile.h" />
 		<Unit filename="CXMLReader.cpp" />
@@ -1010,8 +1015,6 @@
 		<Unit filename="ITriangleRenderer.h" />
 		<Unit filename="IZBuffer.h" />
 		<Unit filename="Irrlicht.cpp" />
-		<Unit filename="MacOSX\CIrrDeviceMacOSX.h" />
-		<Unit filename="MacOSX\CIrrDeviceMacOSX.mm" />
 		<Unit filename="Octree.h" />
 		<Unit filename="S2DVertex.h" />
 		<Unit filename="S4DVertex.h" />

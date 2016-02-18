@@ -48,10 +48,8 @@ namespace video
 		//! destructor
 		virtual ~CNullDriver();
 
-		virtual bool beginScene(bool backBuffer=true, bool zBuffer=true,
-				SColor color=SColor(255,0,0,0),
-				const SExposedVideoData& videoData=SExposedVideoData(),
-				core::rect<s32>* sourceRect=0) _IRR_OVERRIDE_;
+		virtual bool beginScene(u16 clearFlag, SColor clearColor = SColor(255,0,0,0), f32 clearDepth = 1.f, u8 clearStencil = 0,
+			const SExposedVideoData& videoData = SExposedVideoData(), core::rect<s32>* sourceRect = 0) _IRR_OVERRIDE_;
 
 		virtual bool endScene() _IRR_OVERRIDE_;
 
@@ -97,17 +95,18 @@ namespace video
 		//! Renames a texture
 		virtual void renameTexture(ITexture* texture, const io::path& newName) _IRR_OVERRIDE_;
 
-		//! creates a Texture
 		virtual ITexture* addTexture(const core::dimension2d<u32>& size, const io::path& name, ECOLOR_FORMAT format = ECF_A8R8G8B8) _IRR_OVERRIDE_;
 
-		//! set a render target
-		virtual bool setRenderTarget(IRenderTarget* target, const core::array<u32>& activeTextureID, bool clearBackBuffer,
-			bool clearDepthBuffer, bool clearStencilBuffer, SColor clearColor) _IRR_OVERRIDE_;
+		virtual ITexture* addTexture(const io::path& name, IImage* image) _IRR_OVERRIDE_;
 
-		//! set a render target
-		virtual bool setRenderTarget(video::ITexture* texture,
-			bool clearBackBuffer = true, bool clearZBuffer = true,
-			SColor color = video::SColor(0, 0, 0, 0)) _IRR_OVERRIDE_;
+		virtual ITexture* addTextureCubemap(const io::path& name, IImage* imagePosX, IImage* imageNegX, IImage* imagePosY,
+			IImage* imageNegY, IImage* imagePosZ, IImage* imageNegZ) _IRR_OVERRIDE_;
+
+		virtual bool setRenderTargetEx(IRenderTarget* target, u16 clearFlag, SColor clearColor = SColor(255,0,0,0),
+			f32 clearDepth = 1.f, u8 clearStencil = 0) _IRR_OVERRIDE_;
+
+		virtual bool setRenderTarget(ITexture* texture, u16 clearFlag, SColor clearColor = SColor(255,0,0,0),
+			f32 clearDepth = 1.f, u8 clearStencil = 0) _IRR_OVERRIDE_;
 
 		//! sets a viewport
 		virtual void setViewPort(const core::rect<s32>& area) _IRR_OVERRIDE_;
@@ -342,23 +341,20 @@ namespace video
 		//! Returns if a texture creation flag is enabled or disabled.
 		virtual bool getTextureCreationFlag(E_TEXTURE_CREATION_FLAG flag) const _IRR_OVERRIDE_;
 
-		//! Creates a software image from a file.
-		virtual IImage* createImageFromFile(const io::path& filename) _IRR_OVERRIDE_;
+		virtual core::array<IImage*> createImagesFromFile(const io::path& filename, E_TEXTURE_TYPE* type = 0) _IRR_OVERRIDE_;
 
-		//! Creates a software image from a file.
-		virtual IImage* createImageFromFile(io::IReadFile* file) _IRR_OVERRIDE_;
+		virtual core::array<IImage*> createImagesFromFile(io::IReadFile* file, E_TEXTURE_TYPE* type = 0) _IRR_OVERRIDE_;
 
 		//! Creates a software image from a byte array.
 		/** \param useForeignMemory: If true, the image will use the data pointer
 		directly and own it from now on, which means it will also try to delete [] the
 		data when the image will be destructed. If false, the memory will by copied. */
 		virtual IImage* createImageFromData(ECOLOR_FORMAT format,
-			const core::dimension2d<u32>& size, void *data,
-			bool ownForeignMemory=true, bool deleteForeignMemory = true) _IRR_OVERRIDE_;
+			const core::dimension2d<u32>& size, void *data, bool ownForeignMemory = false,
+			bool deleteMemory = true) _IRR_OVERRIDE_;
 
 		//! Creates an empty software image.
 		virtual IImage* createImage(ECOLOR_FORMAT format, const core::dimension2d<u32>& size) _IRR_OVERRIDE_;
-
 
 		//! Creates a software image from another image.
 		virtual IImage* createImage(ECOLOR_FORMAT format, IImage *imageToCopy) _IRR_OVERRIDE_;
@@ -593,11 +589,7 @@ namespace video
 		//! Returns a pointer to the mesh manipulator.
 		virtual scene::IMeshManipulator* getMeshManipulator() _IRR_OVERRIDE_;
 
-		//! Clear the color, depth and/or stencil buffers.
-		virtual void clearBuffers(bool backBuffer, bool depthBuffer, bool stencilBuffer, SColor color) _IRR_OVERRIDE_;
-
-		//! Clears the ZBuffer.
-		virtual void clearZBuffer() _IRR_OVERRIDE_;
+		virtual void clearBuffers(u16 flag, SColor color = SColor(255,0,0,0), f32 depth = 1.f, u8 stencil = 0) _IRR_OVERRIDE_;
 
 		//! Returns an image created from the last rendered frame.
 		virtual IImage* createScreenShot(video::ECOLOR_FORMAT format=video::ECF_UNKNOWN, video::E_RENDER_TARGET target=video::ERT_FRAME_BUFFER) _IRR_OVERRIDE_;
@@ -689,15 +681,14 @@ namespace video
 		//! adds a surface, not loaded or created by the Irrlicht Engine
 		void addTexture(video::ITexture* surface);
 
-		//! Creates a texture from a loaded IImage.
-		virtual ITexture* addTexture(const io::path& name, IImage* image, void* mipmapData=0) _IRR_OVERRIDE_;
+		virtual ITexture* createDeviceDependentTexture(const io::path& name, IImage* image);
 
-		//! returns a device dependent texture from a software surface (IImage)
-		//! THIS METHOD HAS TO BE OVERRIDDEN BY DERIVED DRIVERS WITH OWN TEXTURES
-		virtual video::ITexture* createDeviceDependentTexture(IImage* surface, const io::path& name, void* mipmapData=0);
+		virtual ITexture* createDeviceDependentTextureCubemap(const io::path& name, const core::array<IImage*>& image);
 
 		//! checks triangle count and print warning if wrong
 		bool checkPrimitiveCount(u32 prmcnt) const;
+
+		bool checkImage(const core::array<IImage*>& image) const;
 
 		// adds a material renderer and drops it afterwards. To be used for internal creation
 		s32 addAndDropMaterialRenderer(IMaterialRenderer* m);
@@ -711,16 +702,28 @@ namespace video
 		//! normal map lookup 32 bit version
 		inline f32 nml32(int x, int y, int pitch, int height, s32 *p) const
 		{
-			if (x < 0) x = pitch-1; if (x >= pitch) x = 0;
-			if (y < 0) y = height-1; if (y >= height) y = 0;
+			if (x < 0) 
+				x = pitch-1; 
+			if (x >= pitch) 
+				x = 0;
+			if (y < 0) 
+				y = height-1; 
+			if (y >= height) 
+				y = 0;
 			return (f32)(((p[(y * pitch) + x])>>16) & 0xff);
 		}
 
 		//! normal map lookup 16 bit version
 		inline f32 nml16(int x, int y, int pitch, int height, s16 *p) const
 		{
-			if (x < 0) x = pitch-1; if (x >= pitch) x = 0;
-			if (y < 0) y = height-1; if (y >= height) y = 0;
+			if (x < 0) 
+				x = pitch-1; 
+			if (x >= pitch) 
+				x = 0;
+			if (y < 0) 
+				y = height-1; 
+			if (y >= height) 
+				y = 0;
 
 			return (f32) getAverage ( p[(y * pitch) + x] );
 		}
@@ -763,11 +766,11 @@ namespace video
 
 		struct SDummyTexture : public ITexture
 		{
-			SDummyTexture(const io::path& name) : ITexture(name) {};
+			SDummyTexture(const io::path& name, E_TEXTURE_TYPE type) : ITexture(name, type) {};
 
 			virtual void* lock(E_TEXTURE_LOCK_MODE mode=ETLM_READ_WRITE, u32 mipmapLevel=0) _IRR_OVERRIDE_ { return 0; }
 			virtual void unlock()_IRR_OVERRIDE_ {}
-			virtual void regenerateMipMapLevels(void* mipmapData=0) _IRR_OVERRIDE_ {}
+			virtual void regenerateMipMapLevels(void* data = 0, u32 layer = 0) _IRR_OVERRIDE_ {}
 		};
 		core::array<SSurface> Textures;
 

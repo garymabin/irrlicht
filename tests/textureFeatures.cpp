@@ -53,7 +53,8 @@ bool renderMipLevels(video::E_DRIVER_TYPE driverType)
 			}
 		}
 
-		video::ITexture* tex = driver->addTexture("miptest", image, mipdata);
+		image->setMipMapsData(mipdata, false, true);
+		video::ITexture* tex = driver->addTexture("miptest", image);
 		if (!tex)
 			// is probably an error in the mipdata handling
 			return false;
@@ -69,7 +70,7 @@ bool renderMipLevels(video::E_DRIVER_TYPE driverType)
 
 	(void)smgr->addCameraSceneNode(0, core::vector3df(10,0,-30));
 
-	driver->beginScene(true, true, video::SColor(255,100,101,140));
+	driver->beginScene(video::ECBF_COLOR | video::ECBF_DEPTH, video::SColor(255,100,101,140));
 	smgr->drawAll();
 	driver->endScene();
 
@@ -131,7 +132,9 @@ bool lockAllMipLevels(video::E_DRIVER_TYPE driverType)
 			}
 		}
 
-		video::ITexture* tex = driver->addTexture("miptest", image, mipdata);
+		image->setMipMapsData(mipdata, false, true);
+		video::ITexture* tex = driver->addTexture("miptest", image);
+
 		if (!tex)
 			// is probably an error in the mipdata handling
 			return false;
@@ -142,7 +145,7 @@ bool lockAllMipLevels(video::E_DRIVER_TYPE driverType)
 
 	(void)smgr->addCameraSceneNode();
 
-	driver->beginScene(true, true, video::SColor(255,100,101,140));
+	driver->beginScene(video::ECBF_COLOR | video::ECBF_DEPTH, video::SColor(255,100,101,140));
 	smgr->drawAll();
 	driver->endScene();
 
@@ -247,7 +250,7 @@ bool lockWithAutoMipmap(video::E_DRIVER_TYPE driverType)
 	}
 	(void)smgr->addCameraSceneNode();
 
-	driver->beginScene(true, true, video::SColor(255,100,101,140));
+	driver->beginScene(video::ECBF_COLOR | video::ECBF_DEPTH, video::SColor(255,100,101,140));
 	smgr->drawAll();
 	driver->endScene();
 

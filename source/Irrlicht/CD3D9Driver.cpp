@@ -484,21 +484,18 @@ bool CD3D9Driver::initDriver(HWND hwnd, bool pureSoftware)
 	}
 	ColorFormat = getColorFormatFromD3DFormat(D3DColorFormat);
 
-	RenderTargetChannel.set_used((u32)Caps.NumSimultaneousRTs);
+	ActiveRenderTarget.set_used((u32)Caps.NumSimultaneousRTs);
 
-	for (u32 i = 0; i < RenderTargetChannel.size(); ++i)
-		RenderTargetChannel[i] = -1;
+	for (u32 i = 0; i < ActiveRenderTarget.size(); ++i)
+		ActiveRenderTarget[i] = false;
 
 	// so far so good.
 	return true;
 }
 
-
-//! applications must call this method before performing any rendering. returns false if failed.
-bool CD3D9Driver::beginScene(bool backBuffer, bool zBuffer, SColor color,
-		const SExposedVideoData& videoData, core::rect<s32>* sourceRect)
+bool CD3D9Driver::beginScene(u16 clearFlag, SColor clearColor, f32 clearDepth, u8 clearStencil, const SExposedVideoData& videoData, core::rect<s32>* sourceRect)
 {
-	CNullDriver::beginScene(backBuffer, zBuffer, color, videoData, sourceRect);
+	CNullDriver::beginScene(clearFlag, clearColor, clearDepth, clearStencil, videoData, sourceRect);
 	WindowId = (HWND)videoData.D3D9.HWnd;
 	SceneSourceRect = sourceRect;
 
@@ -523,7 +520,7 @@ bool CD3D9Driver::beginScene(bool backBuffer, bool zBuffer, SColor color,
 		}
 	}
 
-	clearBuffers(backBuffer, zBuffer, false, color);
+	clearBuffers(clearFlag, clearColor, clearDepth, clearStencil);
 
 	hr = pID3DDevice->BeginScene();
 	if (FAILED(hr))
@@ -535,8 +532,6 @@ bool CD3D9Driver::beginScene(bool backBuffer, bool zBuffer, SColor color,
 	return true;
 }
 
-
-//! applications must call this method after performing any rendering. returns false if failed.
 bool CD3D9Driver::endScene()
 {
 	CNullDriver::endScene();
@@ -608,9 +603,7 @@ bool CD3D9Driver::queryFeature(E_VIDEO_DRIVER_FEATURE feature) const
 	case EVDF_MIP_MAP:
 		return (Caps.TextureCaps & D3DPTEXTURECAPS_MIPMAP) != 0;
 	case EVDF_MIP_MAP_AUTO_UPDATE:
-		// always return false because a lot of drivers claim they do
-		// this but actually don't do this at all.
-		return false; //(Caps.Caps2 & D3DCAPS2_CANAUTOGENMIPMAP) != 0;
+		return (Caps.Caps2 & D3DCAPS2_CANAUTOGENMIPMAP) != 0;
 	case EVDF_STENCIL_BUFFER:
 		return Params.Stencilbuffer && Caps.StencilCaps;
 	case EVDF_VERTEX_SHADER_1_1:
@@ -657,6 +650,8 @@ bool CD3D9Driver::queryFeature(E_VIDEO_DRIVER_FEATURE feature) const
 		return true;
 	case EVDF_TEXTURE_COMPRESSED_DXT:
 		return true;
+	case EVDF_TEXTURE_CUBEMAP:
+		return false;
 	default:
 		return false;
 	};
@@ -722,10 +717,10 @@ bool CD3D9Driver::setActiveTexture(u32 stage, const video::ITexture* texture)
 	}
 	else
 	{
-		pID3DDevice->SetTexture(stage, ((const CD3D9Texture*)texture)->getDX9Texture());
+		pID3DDevice->SetTexture(stage, ((const CD3D9Texture*)texture)->getDX9BaseTexture());
 
 		if (stage <= 4)
-            pID3DDevice->SetTexture(D3DVERTEXTEXTURESAMPLER0 + stage, ((const CD3D9Texture*)texture)->getDX9Texture());
+            pID3DDevice->SetTexture(D3DVERTEXTEXTURESAMPLER0 + stage, ((const CD3D9Texture*)texture)->getDX9BaseTexture());
 	}
 	return true;
 }
@@ -745,28 +740,24 @@ void CD3D9Driver::setMaterial(const SMaterial& material)
 	}
 }
 
-
-//! returns a device dependent texture from a software surface (IImage)
-video::ITexture* CD3D9Driver::createDeviceDependentTexture(IImage* surface,const io::path& name, void* mipmapData)
+ITexture* CD3D9Driver::createDeviceDependentTexture(const io::path& name, IImage* image)
 {
-	return new CD3D9Texture(surface, this, TextureCreationFlags, name, mipmapData);
+	core::array<IImage*> imageArray(1);
+	imageArray.push_back(image);
+
+	CD3D9Texture* texture = new CD3D9Texture(name, imageArray, ETT_2D, this);
+
+	return texture;
 }
 
-
-//! Enables or disables a texture creation flag.
-void CD3D9Driver::setTextureCreationFlag(E_TEXTURE_CREATION_FLAG flag,
-		bool enabled)
+ITexture* CD3D9Driver::createDeviceDependentTextureCubemap(const io::path& name, const core::array<IImage*>& image)
 {
-	if (flag == video::ETCF_CREATE_MIP_MAPS && !queryFeature(EVDF_MIP_MAP))
-		enabled = false;
+	CD3D9Texture* texture = new CD3D9Texture(name, image, ETT_CUBEMAP, this);
 
-	CNullDriver::setTextureCreationFlag(flag, enabled);
+	return texture;
 }
 
-
-//! set a render target
-bool CD3D9Driver::setRenderTarget(IRenderTarget* target, const core::array<u32>& activeTextureID, bool clearBackBuffer,
-	bool clearDepthBuffer, bool clearStencilBuffer, SColor clearColor)
+bool CD3D9Driver::setRenderTargetEx(IRenderTarget* target, u16 clearFlag, SColor clearColor, f32 clearDepth, u8 clearStencil)
 {
 	if (target && target->getDriverType() != EDT_DIRECT3D9)
 	{
@@ -776,9 +767,7 @@ bool CD3D9Driver::setRenderTarget(IRenderTarget* target, const core::array<u32>&
 
 	if (target)
 	{
-		RenderTargetActiveID = activeTextureID;
-
-		// store main render target
+		// Store main render target.
 
 		if (!BackBufferSurface)
 		{
@@ -789,44 +778,36 @@ bool CD3D9Driver::setRenderTarget(IRenderTarget* target, const core::array<u32>&
 			}
 		}
 
-		// set new color textures
+		// Set new color textures.
 
 		CD3D9RenderTarget* renderTarget = static_cast<CD3D9RenderTarget*>(target);
 
-		const u32 surfaceSize = core::min_(renderTarget->getSurfaceCount(), RenderTargetChannel.size());
+		const u32 surfaceSize = core::min_(renderTarget->getSurfaceCount(), ActiveRenderTarget.size());
 
-		for (u32 i = 0; i < activeTextureID.size(); ++i)
+		for (u32 i = 0; i < surfaceSize; ++i)
 		{
-			const u32 id = activeTextureID[i];
+			ActiveRenderTarget[i] = true;
 
-			if (id < surfaceSize)
+			if (FAILED(pID3DDevice->SetRenderTarget(i, renderTarget->getSurface(i))))
 			{
-				RenderTargetChannel[id] = 0;
+				ActiveRenderTarget[i] = false;
 
-				if (FAILED(pID3DDevice->SetRenderTarget(id, renderTarget->getSurface(id))))
-				{
-					os::Printer::log("Error: Could not set render target.", ELL_ERROR);
-					RenderTargetChannel[id] = -1;
-				}
+				os::Printer::log("Error: Could not set render target.", ELL_ERROR);
 			}
 		}
 
-		// reset other render target channels
+		// Reset other render target channels.
 
-		for (u32 i = 0; i < RenderTargetChannel.size(); ++i)
+		for (u32 i = surfaceSize; i < ActiveRenderTarget.size(); ++i)
 		{
-			if (RenderTargetChannel[i] == 1)
+			if (ActiveRenderTarget[i])
 			{
 				pID3DDevice->SetRenderTarget(i, 0);
-				RenderTargetChannel[i] = -1;
-			}
-			else if (RenderTargetChannel[i] == 0)
-			{
-				RenderTargetChannel[i] = 1;
+				ActiveRenderTarget[i] = false;
 			}
 		}
 
-		// set depth stencil buffer
+		// Set depth stencil buffer.
 
 		IDirect3DSurface9* depthStencilSurface = renderTarget->getDepthStencilSurface();
 
@@ -835,20 +816,24 @@ bool CD3D9Driver::setRenderTarget(IRenderTarget* target, const core::array<u32>&
 			os::Printer::log("Error: Could not set depth-stencil buffer.", ELL_ERROR);
 		}
 
-		// set other settings
+		// Set other settings.
 
-		CurrentRendertargetSize = renderTarget->getSize();
+		CurrentRenderTargetSize = renderTarget->getSize();
 		Transformation3DChanged = true;
 	}
 	else if (CurrentRenderTarget != target)
 	{
-		// set main render target
+		// Set main render target.
 
 		if (BackBufferSurface)
 		{
+			ActiveRenderTarget[0] = true;
+
 			if (FAILED(pID3DDevice->SetRenderTarget(0, BackBufferSurface)))
 			{
 				os::Printer::log("Error: Could not set main render target.", ELL_ERROR);
+				ActiveRenderTarget[0] = false;
+
 				return false;
 			}
 
@@ -856,33 +841,33 @@ bool CD3D9Driver::setRenderTarget(IRenderTarget* target, const core::array<u32>&
 			BackBufferSurface = 0;
 		}
 
-		// reset other render target channels
+		// Reset other render target channels.
 
-		for (u32 i = 1; i < RenderTargetChannel.size(); ++i)
+		for (u32 i = 1; i < ActiveRenderTarget.size(); ++i)
 		{
-			if (RenderTargetChannel[i] == 1)
+			if (ActiveRenderTarget[i])
 			{
 				pID3DDevice->SetRenderTarget(i, 0);
-				RenderTargetChannel[i] = -1;
+				ActiveRenderTarget[i] = false;
 			}
 		}
 
-		// set main depth-stencil stencil buffer
+		// Set main depth-stencil stencil buffer.
 
 		if (FAILED(pID3DDevice->SetDepthStencilSurface(DepthStencilSurface)))
 		{
 			os::Printer::log("Error: Could not set main depth-stencil buffer.", ELL_ERROR);
 		}
 
-		// set other settings
+		// Set other settings.
 
-		CurrentRendertargetSize = core::dimension2d<u32>(0, 0);
+		CurrentRenderTargetSize = core::dimension2d<u32>(0, 0);
 		Transformation3DChanged = true;
 	}
 
 	CurrentRenderTarget = target;
 
-	clearBuffers(clearBackBuffer, clearDepthBuffer, clearStencilBuffer, clearColor);
+	clearBuffers(clearFlag, clearColor, clearDepth, clearStencil);
 
 	return true;
 }
@@ -1419,7 +1404,7 @@ void CD3D9Driver::draw2D3DVertexPrimitiveList(const void* vertices,
 				pID3DDevice->DrawIndexedPrimitiveUP(D3DPT_LINESTRIP, 0, vertexCount,
 				primitiveCount - 1, indexList, indexType, vertices, stride);
 
-				u16 tmpIndices[] = {primitiveCount - 1, 0};
+				u16 tmpIndices[] = {static_cast<u16>(primitiveCount - 1), 0};
 
 				pID3DDevice->DrawIndexedPrimitiveUP(D3DPT_LINELIST, 0, vertexCount,
 					1, tmpIndices, indexType, vertices, stride);
@@ -2318,9 +2303,18 @@ void CD3D9Driver::setBasicRenderStates(const SMaterial& material, const SMateria
 			pID3DDevice->SetSamplerState(st, D3DSAMP_ADDRESSU, getTextureWrapMode(material.TextureLayer[st].TextureWrapU));
 		// If separate UV not supported reuse U for V
 		if (!(Caps.TextureAddressCaps & D3DPTADDRESSCAPS_INDEPENDENTUV))
+		{
 			pID3DDevice->SetSamplerState(st, D3DSAMP_ADDRESSV, getTextureWrapMode(material.TextureLayer[st].TextureWrapU));
-		else if (resetAllRenderstates || lastmaterial.TextureLayer[st].TextureWrapV != material.TextureLayer[st].TextureWrapV)
-			pID3DDevice->SetSamplerState(st, D3DSAMP_ADDRESSV, getTextureWrapMode(material.TextureLayer[st].TextureWrapV));
+			pID3DDevice->SetSamplerState(st, D3DSAMP_ADDRESSW, getTextureWrapMode(material.TextureLayer[st].TextureWrapU));
+		}
+		else
+		{
+			if (resetAllRenderstates || lastmaterial.TextureLayer[st].TextureWrapV != material.TextureLayer[st].TextureWrapV)
+				pID3DDevice->SetSamplerState(st, D3DSAMP_ADDRESSV, getTextureWrapMode(material.TextureLayer[st].TextureWrapV));
+
+			if (resetAllRenderstates || lastmaterial.TextureLayer[st].TextureWrapW != material.TextureLayer[st].TextureWrapW)
+				pID3DDevice->SetSamplerState(st, D3DSAMP_ADDRESSW, getTextureWrapMode(material.TextureLayer[st].TextureWrapW));
+		}
 
 		// Bilinear, trilinear, and anisotropic filter
 		if (resetAllRenderstates ||
@@ -2836,15 +2830,33 @@ bool CD3D9Driver::reset()
 	for (i = 0; i<RenderTargets.size(); ++i)
 	{
 		if (RenderTargets[i]->getDriverType() == EDT_DIRECT3D9)
+		{
 			static_cast<CD3D9RenderTarget*>(RenderTargets[i])->releaseSurfaces();
+
+			const core::array<ITexture*> texArray = RenderTargets[i]->getTexture();
+
+			for (u32 j = 0; j < texArray.size(); ++j)
+			{
+				CD3D9Texture* tex = static_cast<CD3D9Texture*>(texArray[j]);
+				
+				if (tex)
+					tex->releaseTexture();
+			}
+
+			CD3D9Texture* tex = static_cast<CD3D9Texture*>(RenderTargets[i]->getDepthStencil());
+
+			if (tex)
+				tex->releaseTexture();
+		}
 	}
 	for (i=0; i<Textures.size(); ++i)
 	{
 		if (Textures[i].Surface->isRenderTarget())
 		{
-			IDirect3DTexture9* tex = ((CD3D9Texture*)(Textures[i].Surface))->getDX9Texture();
+			CD3D9Texture* tex = static_cast<CD3D9Texture*>(Textures[i].Surface);
+
 			if (tex)
-				tex->Release();
+				tex->releaseTexture();
 		}
 	}
 	for (i=0; i<OcclusionQueries.size(); ++i)
@@ -2860,8 +2872,8 @@ bool CD3D9Driver::reset()
 	removeAllHardwareBuffers();
 
 	// reset render target usage informations.
-	for (u32 i = 0; i < RenderTargetChannel.size(); ++i)
-		RenderTargetChannel[i] = -1;
+	for (u32 i = 0; i < ActiveRenderTarget.size(); ++i)
+		ActiveRenderTarget[i] = false;
 
 	if (DepthStencilSurface)
 		DepthStencilSurface->Release();
@@ -2888,12 +2900,29 @@ bool CD3D9Driver::reset()
 	for (i=0; i<Textures.size(); ++i)
 	{
 		if (Textures[i].Surface->isRenderTarget())
-			((CD3D9Texture*)(Textures[i].Surface))->createRenderTarget();
+			((CD3D9Texture*)(Textures[i].Surface))->generateRenderTarget();
 	}
 	for (i = 0; i<RenderTargets.size(); ++i)
 	{
 		if (RenderTargets[i]->getDriverType() == EDT_DIRECT3D9)
+		{
+			const core::array<ITexture*> texArray = RenderTargets[i]->getTexture();
+
+			for (u32 j = 0; j < texArray.size(); ++j)
+			{
+				CD3D9Texture* tex = static_cast<CD3D9Texture*>(texArray[j]);
+
+				if (tex)
+					tex->generateRenderTarget();
+			}
+
+			CD3D9Texture* tex = static_cast<CD3D9Texture*>(RenderTargets[i]->getDepthStencil());
+
+			if (tex)
+				tex->generateRenderTarget();
+
 			static_cast<CD3D9RenderTarget*>(RenderTargets[i])->generateSurfaces();
+		}
 	}
 
 	// restore occlusion queries
@@ -3156,38 +3185,26 @@ ITexture* CD3D9Driver::addRenderTargetTexture(const core::dimension2d<u32>& size
 	return tex;
 }
 
-
-//! Clear the color, depth and/or stencil buffers.
-void CD3D9Driver::clearBuffers(bool backBuffer, bool depthBuffer, bool stencilBuffer, SColor color)
+void CD3D9Driver::clearBuffers(u16 flag, SColor color, f32 depth, u8 stencil)
 {
-	DWORD flags = 0;
+	DWORD internalFlag = 0;
 
-	if (backBuffer)
-		flags |= D3DCLEAR_TARGET;
+	if (flag & ECBF_COLOR)
+		internalFlag |= D3DCLEAR_TARGET;
 
-	if (depthBuffer)
-		flags |= D3DCLEAR_ZBUFFER;
+	if (flag & ECBF_DEPTH)
+		internalFlag |= D3DCLEAR_ZBUFFER;
 
-	if (stencilBuffer)
-		flags |= D3DCLEAR_STENCIL;
+	if (flag & ECBF_STENCIL)
+		internalFlag |= D3DCLEAR_STENCIL;
 
-	if (flags)
+	if (internalFlag)
 	{
-		HRESULT hr = pID3DDevice->Clear(0, NULL, flags, color.color, 1.0, 0);
+		HRESULT hr = pID3DDevice->Clear(0, NULL, internalFlag, color.color, depth, stencil);
 
 		if (FAILED(hr))
 			os::Printer::log("DIRECT3D9 clear failed.", ELL_WARNING);
 	}
-}
-
-
-//! Clears the ZBuffer.
-void CD3D9Driver::clearZBuffer()
-{
-	HRESULT hr = pID3DDevice->Clear( 0, NULL, D3DCLEAR_ZBUFFER, 0, 1.0, 0);
-
-	if (FAILED(hr))
-		os::Printer::log("CD3D9Driver clearZBuffer() failed.", ELL_WARNING);
 }
 
 
@@ -3315,16 +3332,6 @@ D3DFORMAT CD3D9Driver::getD3DColorFormat() const
 }
 
 
-// returns the current size of the screen or rendertarget
-const core::dimension2d<u32>& CD3D9Driver::getCurrentRenderTargetSize() const
-{
-	if ( CurrentRendertargetSize.Width == 0 )
-		return ScreenSize;
-	else
-		return CurrentRendertargetSize;
-}
-
-
 // Set/unset a clipping plane.
 bool CD3D9Driver::setClipPlane(u32 index, const core::plane3df& plane, bool enable)
 {
@@ -3368,6 +3375,16 @@ D3DFORMAT CD3D9Driver::getD3DFormatFromColorFormat(ECOLOR_FORMAT format) const
 			return D3DFMT_R8G8B8;
 		case ECF_A8R8G8B8:
 			return D3DFMT_A8R8G8B8;
+		case ECF_DXT1:
+			return D3DFMT_DXT1;
+		case ECF_DXT2:
+			return D3DFMT_DXT2;
+		case ECF_DXT3:
+			return D3DFMT_DXT3;
+		case ECF_DXT4:
+			return D3DFMT_DXT4;
+		case ECF_DXT5:
+			return D3DFMT_DXT5;
 		case ECF_R16F:
 			return D3DFMT_R16F;
 		case ECF_G16R16F:

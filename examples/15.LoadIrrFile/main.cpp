@@ -12,6 +12,7 @@ Lets start: Create an Irrlicht device and setup the window.
 
 #include <irrlicht.h>
 #include "driverChoice.h"
+#include "exampleHelper.h"
 
 using namespace irr;
 
@@ -61,7 +62,7 @@ int main(int argc, char** argv)
 	if (argc>1)
 		smgr->loadScene(argv[1]);
 	else
-		smgr->loadScene("../../media/example.irr");
+		smgr->loadScene(getExampleMediaPath() + "example.irr");
 
 	/*
 	Now we'll create a camera, and give it a collision response animator
@@ -152,7 +153,7 @@ int main(int argc, char** argv)
 	while(device->run())
 	if (device->isWindowActive())
 	{
-		driver->beginScene(true, true, video::SColor(0,200,200,200));
+		driver->beginScene(video::ECBF_COLOR | video::ECBF_DEPTH, video::SColor(0,200,200,200));
 		smgr->drawAll();
 		driver->endScene();
 

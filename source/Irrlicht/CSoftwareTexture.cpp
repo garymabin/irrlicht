@@ -15,9 +15,8 @@ namespace video
 {
 
 //! constructor
-CSoftwareTexture::CSoftwareTexture(IImage* image, const io::path& name,
-		bool renderTarget, void* mipmapData)
-: ITexture(name), Texture(0)
+CSoftwareTexture::CSoftwareTexture(IImage* image, const io::path& name, bool renderTarget)
+	: ITexture(name, ETT_2D), Texture(0)
 {
 	#ifdef _DEBUG
 	setDebugName("CSoftwareTexture");
@@ -26,7 +25,6 @@ CSoftwareTexture::CSoftwareTexture(IImage* image, const io::path& name,
 	DriverType = EDT_SOFTWARE;
 	ColorFormat = ECF_A1R5G5B5;
 	HasMipMaps = false;
-	HasAlpha = true;
 	IsRenderTarget = renderTarget;
 
 	if (image)
@@ -80,7 +78,7 @@ CSoftwareTexture::~CSoftwareTexture()
 //! lock function
 void* CSoftwareTexture::lock(E_TEXTURE_LOCK_MODE mode, u32 mipmapLevel)
 {
-	return Image->lock();
+	return Image->getData();
 }
 
 
@@ -93,8 +91,6 @@ void CSoftwareTexture::unlock()
 		os::Printer::log("Performance warning, slow unlock of non power of 2 texture.", ELL_WARNING);
 		Image->copyToScaling(Texture);
 	}
-
-	Image->unlock();
 }
 
 
@@ -111,10 +107,7 @@ CImage* CSoftwareTexture::getTexture()
 	return Texture;
 }
 
-
-//! Regenerates the mip map levels of the texture. Useful after locking and
-//! modifying the texture
-void CSoftwareTexture::regenerateMipMapLevels(void* mipmapData)
+void CSoftwareTexture::regenerateMipMapLevels(void* data, u32 layer)
 {
 	// our software textures don't have mip maps
 }

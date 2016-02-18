@@ -44,13 +44,9 @@ namespace video
 		//! destructor
 		virtual ~CD3D9Driver();
 
-		//! applications must call this method before performing any rendering. returns false if failed.
-		virtual bool beginScene(bool backBuffer=true, bool zBuffer=true,
-				SColor color=SColor(255,0,0,0),
-				const SExposedVideoData& videoData=SExposedVideoData(),
-				core::rect<s32>* sourceRect=0) _IRR_OVERRIDE_;
+		virtual bool beginScene(u16 clearFlag, SColor clearColor = SColor(255,0,0,0), f32 clearDepth = 1.f, u8 clearStencil = 0,
+			const SExposedVideoData& videoData = SExposedVideoData(), core::rect<s32>* sourceRect = 0) _IRR_OVERRIDE_;
 
-		//! applications must call this method after performing any rendering. returns false if failed.
 		virtual bool endScene() _IRR_OVERRIDE_;
 
 		//! queries the features of the driver, returns true if feature is available
@@ -62,9 +58,8 @@ namespace video
 		//! sets a material
 		virtual void setMaterial(const SMaterial& material) _IRR_OVERRIDE_;
 
-		//! set a render target
-		virtual bool setRenderTarget(IRenderTarget* target, const core::array<u32>& activeTextureID, bool clearBackBuffer,
-			bool clearDepthBuffer, bool clearStencilBuffer, SColor clearColor) _IRR_OVERRIDE_;
+		virtual bool setRenderTargetEx(IRenderTarget* target, u16 clearFlag, SColor clearColor = SColor(255,0,0,0),
+			f32 clearDepth = 1.f, u8 clearStencil = 0) _IRR_OVERRIDE_;
 
 		//! sets a viewport
 		virtual void setViewPort(const core::rect<s32>& area) _IRR_OVERRIDE_;
@@ -218,9 +213,6 @@ namespace video
 		//! call.
 		virtual u32 getMaximalPrimitiveCount() const _IRR_OVERRIDE_;
 
-		//! Enables or disables a texture creation flag.
-		virtual void setTextureCreationFlag(E_TEXTURE_CREATION_FLAG flag, bool enabled) _IRR_OVERRIDE_;
-
 		//! Sets the fog mode.
 		virtual void setFog(SColor color, E_FOG_TYPE fogType, f32 start,
 			f32 end, f32 density, bool pixelFog, bool rangeFog) _IRR_OVERRIDE_;
@@ -271,11 +263,7 @@ namespace video
 		virtual ITexture* addRenderTargetTexture(const core::dimension2d<u32>& size,
 				const io::path& name, const ECOLOR_FORMAT format = ECF_UNKNOWN) _IRR_OVERRIDE_;
 
-		//! Clear the color, depth and/or stencil buffers.
-		virtual void clearBuffers(bool backBuffer, bool depthBuffer, bool stencilBuffer, SColor color) _IRR_OVERRIDE_;
-
-		//! Clears the ZBuffer.
-		virtual void clearZBuffer() _IRR_OVERRIDE_;
+		virtual void clearBuffers(u16 flag, SColor color = SColor(255,0,0,0), f32 depth = 1.f, u8 stencil = 0) _IRR_OVERRIDE_;
 
 		//! Returns an image created from the last rendered frame.
 		virtual IImage* createScreenShot(video::ECOLOR_FORMAT format=video::ECF_UNKNOWN, video::E_RENDER_TARGET target=video::ERT_FRAME_BUFFER) _IRR_OVERRIDE_;
@@ -355,12 +343,9 @@ namespace video
 		//! resets the device
 		bool reset();
 
-		//! returns a device dependent texture from a software surface (IImage)
-		//! THIS METHOD HAS TO BE OVERRIDDEN BY DERIVED DRIVERS WITH OWN TEXTURES
-		virtual video::ITexture* createDeviceDependentTexture(IImage* surface, const io::path& name, void* mipmapData=0) _IRR_OVERRIDE_;
+		virtual ITexture* createDeviceDependentTexture(const io::path& name, IImage* image) _IRR_OVERRIDE_;
 
-		//! returns the current size of the screen or rendertarget
-		virtual const core::dimension2d<u32>& getCurrentRenderTargetSize() const _IRR_OVERRIDE_;
+		virtual ITexture* createDeviceDependentTextureCubemap(const io::path& name, const core::array<IImage*>& image) _IRR_OVERRIDE_;
 
 		//! Adds a new material renderer to the VideoDriver, using pixel and/or
 		//! vertex shaders to render geometry.
@@ -427,9 +412,7 @@ namespace video
 		IDirect3DSurface9* BackBufferSurface;
 		IDirect3DSurface9* DepthStencilSurface;
 
-		core::dimension2d<u32> CurrentRendertargetSize;
-		core::array<s32> RenderTargetChannel;
-		core::array<u32> RenderTargetActiveID;
+		core::array<bool> ActiveRenderTarget;
 
 		HWND WindowId;
 		core::rect<s32>* SceneSourceRect;

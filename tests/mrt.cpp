@@ -28,7 +28,6 @@ static bool testWithDriver(video::E_DRIVER_TYPE driverType)
 	video::IRenderTarget* renderTarget = 0;
 	core::array<video::ITexture*> renderTargetTex;
 	video::ITexture* renderTargetDepth = 0;
-	core::array<u32> renderTargetID;
 
 	const core::dimension2du texsize(64,64);
 	bool result=true;
@@ -42,11 +41,6 @@ static bool testWithDriver(video::E_DRIVER_TYPE driverType)
 		renderTargetTex[2] = driver->addRenderTargetTexture(texsize, "rtc", video::ECF_A8R8G8B8);
 
 		renderTargetDepth = driver->addRenderTargetTexture(texsize, "rtd", video::ECF_D16);
-
-		renderTargetID.set_used(3);
-		renderTargetID[0] = 0;
-		renderTargetID[1] = 1;
-		renderTargetID[2] = 2;
 
 		renderTarget = driver->addRenderTarget();
 		renderTarget->setTexture(renderTargetTex, renderTargetDepth);
@@ -68,11 +62,11 @@ static bool testWithDriver(video::E_DRIVER_TYPE driverType)
 		node->setMaterialType((video::E_MATERIAL_TYPE)newMaterialType);
 		device->getSceneManager()->addCameraSceneNode(0, core::vector3df(0,0,-10));
 
-		driver->beginScene(true, false, video::SColor(255, 0, 0, 0));
+		driver->beginScene(video::ECBF_COLOR, video::SColor(255, 0, 0, 0));
 		// render
-		driver->setRenderTarget(renderTarget, renderTargetID, true, true, false, video::SColor(255, 0, 0, 0));
+		driver->setRenderTargetEx(renderTarget, video::ECBF_COLOR | video::ECBF_DEPTH, video::SColor(255,0,0,0));
 		device->getSceneManager()->drawAll();
-		driver->setRenderTarget(0, renderTargetID, false, false, false, video::SColor(255, 0, 0, 0));
+		driver->setRenderTargetEx(0, 0, video::SColor(255, 0, 0, 0));
 
 		// draw debug rt
 		driver->draw2DImage(renderTargetTex[0], core::position2d<s32>(0,0));
@@ -83,12 +77,12 @@ static bool testWithDriver(video::E_DRIVER_TYPE driverType)
 
 		result = takeScreenshotAndCompareAgainstReference(driver, "-mrt.png");
 
-		driver->beginScene(true, false, video::SColor(255, 0, 0, 0));
+		driver->beginScene(video::ECBF_COLOR, video::SColor(255, 0, 0, 0));
 		// render
 		device->getSceneManager()->getActiveCamera()->setPosition(core::vector3df(0,0,-15));
-		driver->setRenderTarget(renderTarget, renderTargetID, true, true, false, video::SColor(255, 0, 0, 0));
+		driver->setRenderTargetEx(renderTarget, video::ECBF_COLOR | video::ECBF_DEPTH, video::SColor(255,0,0,0));
 		device->getSceneManager()->drawAll();
-		driver->setRenderTarget(0, renderTargetID, false, false, false, video::SColor(255, 0, 0, 0));
+		driver->setRenderTargetEx(0, 0, video::SColor(255,0,0,0));
 
 		// draw debug rt
 		driver->draw2DImage(renderTargetTex[0], core::position2d<s32>(0,0));

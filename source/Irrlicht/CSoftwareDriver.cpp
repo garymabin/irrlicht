@@ -227,22 +227,17 @@ void CSoftwareDriver::setMaterial(const SMaterial& material)
 	}
 }
 
-
-//! clears the zbuffer
-bool CSoftwareDriver::beginScene(bool backBuffer, bool zBuffer, SColor color,
-		const SExposedVideoData& videoData, core::rect<s32>* sourceRect)
+bool CSoftwareDriver::beginScene(u16 clearFlag, SColor clearColor, f32 clearDepth, u8 clearStencil, const SExposedVideoData& videoData, core::rect<s32>* sourceRect)
 {
-	CNullDriver::beginScene(backBuffer, zBuffer, color, videoData, sourceRect);
+	CNullDriver::beginScene(clearFlag, clearColor, clearDepth, clearStencil, videoData, sourceRect);
 	WindowId=videoData.D3D9.HWnd;
 	SceneSourceRect = sourceRect;
 
-	clearBuffers(backBuffer, zBuffer, false, color);
+	clearBuffers(clearFlag, clearColor, clearDepth, clearStencil);
 
 	return true;
 }
 
-
-//! presents the rendered scene on the screen, returns false if failed
 bool CSoftwareDriver::endScene()
 {
 	CNullDriver::endScene();
@@ -250,18 +245,14 @@ bool CSoftwareDriver::endScene()
 	return Presenter->present(BackBuffer, WindowId, SceneSourceRect);
 }
 
-
-//! returns a device dependent texture from a software surface (IImage)
-//! THIS METHOD HAS TO BE OVERRIDDEN BY DERIVED DRIVERS WITH OWN TEXTURES
-ITexture* CSoftwareDriver::createDeviceDependentTexture(IImage* surface, const io::path& name, void* mipmapData)
+ITexture* CSoftwareDriver::createDeviceDependentTexture(const io::path& name, IImage* image)
 {
-	return new CSoftwareTexture(surface, name, false, mipmapData);
+	CSoftwareTexture* texture = new CSoftwareTexture(image, name, false);
+
+	return texture;
 }
 
-
-//! set a render target
-bool CSoftwareDriver::setRenderTarget(IRenderTarget* target, const core::array<u32>& activeTextureID, bool clearBackBuffer,
-	bool clearDepthBuffer, bool clearStencilBuffer, SColor clearColor)
+bool CSoftwareDriver::setRenderTargetEx(IRenderTarget* target, u16 clearFlag, SColor clearColor, f32 clearDepth, u8 clearStencil)
 {
 	if (target && target->getDriverType() != EDT_SOFTWARE)
 	{
@@ -285,7 +276,7 @@ bool CSoftwareDriver::setRenderTarget(IRenderTarget* target, const core::array<u
 		setRenderTarget(BackBuffer);
 	}
 
-	clearBuffers(clearBackBuffer, clearDepthBuffer, clearStencilBuffer, clearColor);
+	clearBuffers(clearFlag, clearColor, clearDepth, clearStencil);
 
 	return true;
 }
@@ -912,22 +903,12 @@ ITexture* CSoftwareDriver::addRenderTargetTexture(const core::dimension2d<u32>& 
 	return tex;
 }
 
-
-//! Clear the color, depth and/or stencil buffers.
-void CSoftwareDriver::clearBuffers(bool backBuffer, bool depthBuffer, bool stencilBuffer, SColor color)
+void CSoftwareDriver::clearBuffers(u16 flag, SColor color, f32 depth, u8 stencil)
 {
-	if (backBuffer && RenderTargetSurface)
+	if ((flag & ECBF_COLOR) && RenderTargetSurface)
 		RenderTargetSurface->fill(color);
 
-	if (depthBuffer && ZBuffer)
-		ZBuffer->clear();
-}
-
-
-//! Clears the ZBuffer.
-void CSoftwareDriver::clearZBuffer()
-{
-	if (ZBuffer)
+	if ((flag & ECBF_DEPTH) && ZBuffer)
 		ZBuffer->clear();
 }
 

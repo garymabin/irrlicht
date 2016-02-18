@@ -31,9 +31,8 @@ public:
 		GEN_MIPMAP	= 1,
 		IS_RENDERTARGET	= 2,
 		NP2_SIZE	= 4,
-		HAS_ALPHA	= 8
 	};
-	CSoftwareTexture2(IImage* surface, const io::path& name, u32 flags, void* mipmapData=0);
+	CSoftwareTexture2(IImage* surface, const io::path& name, u32 flags);
 
 	//! destructor
 	virtual ~CSoftwareTexture2();
@@ -48,13 +47,12 @@ public:
 			Pitch = MipMap[MipMapLOD]->getPitch();
 		}
 
-		return MipMap[MipMapLOD]->lock();
+		return MipMap[MipMapLOD]->getData();
 	}
 
 	//! unlock function
 	virtual void unlock() _IRR_OVERRIDE_
 	{
-		MipMap[MipMapLOD]->unlock();
 	}
 
 	//! Returns the size of the largest mipmap.
@@ -76,9 +74,7 @@ public:
 		return MipMap[MipMapLOD];
 	}
 
-	//! Regenerates the mip map levels of the texture. Useful after locking and
-	//! modifying the texture
-	virtual void regenerateMipMapLevels(void* mipmapData=0) _IRR_OVERRIDE_;
+	virtual void regenerateMipMapLevels(void* data = 0, u32 layer = 0) _IRR_OVERRIDE_;
 
 private:
 	f32 OrigImageDataSizeInPixels;

@@ -19,8 +19,9 @@ ftp://ftp.idsoftware.com/idstuff/quake3/win32/q3ademo.exe
 Copyright 2006-2011 Burningwater, Thomas Alten
 */
 
-#include "driverChoice.h"
 #include <irrlicht.h>
+#include "driverChoice.h"
+#include "exampleHelper.h"
 #include "q3factory.h"
 #include "sound.h"
 
@@ -107,14 +108,16 @@ void GameData::setDefault ()
 	CurrentMapName = "";
 	CurrentArchiveList.clear ();
 
+	const io::path mediaPath = getExampleMediaPath();
+
 	// Explorer Media directory
-	CurrentArchiveList.push_back ( StartupDir + "../../media/" );
+	CurrentArchiveList.push_back ( StartupDir + mediaPath );
 
 	// Add the original quake3 files before you load your custom map
 	// Most mods are using the original shaders, models&items&weapons
 	CurrentArchiveList.push_back("/q/baseq3/");
 
-	CurrentArchiveList.push_back(StartupDir + "../../media/map-20kdm2.pk3");
+	CurrentArchiveList.push_back(StartupDir + mediaPath + "map-20kdm2.pk3");
 }
 
 /*
@@ -595,7 +598,7 @@ void CQuake3EventHandler::createTextures()
 	for ( i = 0; i != 8; ++i )
 	{
 		image = driver->createImage ( video::ECF_A8R8G8B8, dim);
-		data = (u32*) image->lock ();
+		data = (u32*) image->getData ();
 		for ( y = 0; y != dim.Height; ++y )
 		{
 			for ( x = 0; x != dim.Width; ++x )
@@ -604,7 +607,6 @@ void CQuake3EventHandler::createTextures()
 			}
 			data = (u32*) ( (u8*) data + image->getPitch() );
 		}
-		image->unlock();
 		snprintf_irr ( buf, 64, "smoke_%02d", i );
 		driver->addTexture( buf, image );
 		image->drop ();
@@ -614,7 +616,7 @@ void CQuake3EventHandler::createTextures()
 	for ( i = 0; i != 1; ++i )
 	{
 		image = driver->createImage ( video::ECF_A8R8G8B8, dim);
-		data = (u32*) image->lock ();
+		data = (u32*) image->getData ();
 		for ( y = 0; y != dim.Height; ++y )
 		{
 			for ( x = 0; x != dim.Width; ++x )
@@ -623,7 +625,6 @@ void CQuake3EventHandler::createTextures()
 			}
 			data = (u32*) ( (u8*) data + image->getPitch() );
 		}
-		image->unlock();
 		snprintf_irr ( buf, 64, "fog_%02d", i );
 		driver->addTexture( buf, image );
 		image->drop ();
@@ -1346,7 +1347,7 @@ bool CQuake3EventHandler::OnEvent(const SEvent& eve)
 		else
 		if ( eve.GUIEvent.Caller == gui.ArchiveFileOpen && eve.GUIEvent.EventType == gui::EGET_FILE_SELECTED )
 		{
-			AddArchive ( gui.ArchiveFileOpen->getFileName() );
+			AddArchive ( gui.ArchiveFileOpen->getFileNameP() );
 			gui.ArchiveFileOpen = 0;
 		}
 		else
@@ -1925,7 +1926,7 @@ void CQuake3EventHandler::Render()
 	if (anaglyph)
 	{
 		scene::ICameraSceneNode* cameraOld = Game->Device->getSceneManager()->getActiveCamera();
-		driver->beginScene(true, true, SColor(0,0,0,0));
+		driver->beginScene(video::ECBF_COLOR | video::ECBF_DEPTH, SColor(0,0,0,0));
 		driver->getOverrideMaterial().Material.ColorMask = ECP_NONE;
 		driver->getOverrideMaterial().EnableFlags  = EMF_COLOR_MASK;
         driver->getOverrideMaterial().EnablePasses = ESNRP_SKY_BOX +
@@ -1934,7 +1935,7 @@ void CQuake3EventHandler::Render()
                                                      ESNRP_TRANSPARENT_EFFECT +
                                                      ESNRP_SHADOW;
 		Game->Device->getSceneManager()->drawAll();
-		driver->clearZBuffer();
+		driver->clearBuffers(video::ECBF_DEPTH, video::SColor(255,0,0,0));
 
 		const vector3df oldPosition = cameraOld->getPosition();
 		const vector3df oldTarget   = cameraOld->getTarget();
@@ -1962,7 +1963,7 @@ void CQuake3EventHandler::Render()
 		camera->setTarget(focusPoint);
 
 		Game->Device->getSceneManager()->drawAll();
-		driver->clearZBuffer();
+		driver->clearBuffers(video::ECBF_DEPTH, video::SColor(255, 0, 0, 0));
 
 		//Right eye...
 		move.setTranslation( vector3df(1.5f,0.0f,0.0f) );
@@ -1996,7 +1997,7 @@ void CQuake3EventHandler::Render()
 	}
 	else
 	{
-		driver->beginScene(true, true, SColor(0,0,0,0));
+		driver->beginScene(video::ECBF_COLOR | video::ECBF_DEPTH, SColor(0,0,0,0));
 		Game->Device->getSceneManager()->drawAll();
 	}
 	Game->Device->getGUIEnvironment()->drawAll();

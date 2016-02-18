@@ -35,6 +35,9 @@ IImageLoader* createImageLoaderTGA();
 //! creates a loader which is able to load psd images
 IImageLoader* createImageLoaderPSD();
 
+//! creates a loader which is able to load psd images
+IImageLoader* createImageLoaderPVR();
+
 //! creates a loader which is able to load dds images
 IImageLoader* createImageLoaderDDS();
 
@@ -138,6 +141,9 @@ CNullDriver::CNullDriver(io::IFileSystem* io, const core::dimension2d<u32>& scre
 #ifdef _IRR_COMPILE_WITH_PSD_LOADER_
 	SurfaceLoader.push_back(video::createImageLoaderPSD());
 #endif
+#ifdef _IRR_COMPILE_WITH_PVR_LOADER_
+	SurfaceLoader.push_back(video::createImageLoaderPVR());
+#endif
 #if defined(_IRR_COMPILE_WITH_DDS_LOADER_) || defined(_IRR_COMPILE_WITH_DDS_DECODER_LOADER_)
 	SurfaceLoader.push_back(video::createImageLoaderDDS());
 #endif
@@ -196,6 +202,7 @@ CNullDriver::CNullDriver(io::IFileSystem* io, const core::dimension2d<u32>& scre
 		InitMaterial2D.TextureLayer[i].BilinearFilter=false;
 		InitMaterial2D.TextureLayer[i].TextureWrapU=video::ETC_REPEAT;
 		InitMaterial2D.TextureLayer[i].TextureWrapV=video::ETC_REPEAT;
+		InitMaterial2D.TextureLayer[i].TextureWrapW = video::ETC_REPEAT;
 	}
 	OverrideMaterial2D=InitMaterial2D;
 }
@@ -308,19 +315,13 @@ void CNullDriver::deleteAllTextures()
 	SharedDepthTextures.clear();
 }
 
-
-
-//! applications must call this method before performing any rendering. returns false if failed.
-bool CNullDriver::beginScene(bool backBuffer, bool zBuffer, SColor color,
-		const SExposedVideoData& videoData, core::rect<s32>* sourceRect)
+bool CNullDriver::beginScene(u16 clearFlag, SColor clearColor, f32 clearDepth, u8 clearStencil, const SExposedVideoData& videoData, core::rect<s32>* sourceRect)
 {
 	core::clearFPUException();
 	PrimitivesDrawn = 0;
 	return true;
 }
 
-
-//! applications must call this method after performing any rendering. returns false if failed.
 bool CNullDriver::endScene()
 {
 	FPSCounter.registerFrame(os::Timer::getRealTime(), PrimitivesDrawn);
@@ -427,6 +428,93 @@ void CNullDriver::renameTexture(ITexture* texture, const io::path& newName)
 	Textures.sort();
 }
 
+ITexture* CNullDriver::addTexture(const core::dimension2d<u32>& size, const io::path& name, ECOLOR_FORMAT format)
+{
+	if (IImage::isRenderTargetOnlyFormat(format))
+	{
+		os::Printer::log("Could not create ITexture, format only supported for render target textures.", ELL_WARNING);
+		return 0;
+	}
+
+	if (0 == name.size())
+		return 0;
+
+	IImage* image = new CImage(format, size);
+	ITexture* t = 0;
+
+	core::array<IImage*> imageArray(1);
+	imageArray.push_back(image);
+
+	if (checkImage(imageArray))
+	{
+		t = createDeviceDependentTexture(name, image);
+	}
+
+	image->drop();
+
+	if (t)
+	{
+		addTexture(t);
+		t->drop();
+	}
+
+	return t;
+}
+
+ITexture* CNullDriver::addTexture(const io::path& name, IImage* image)
+{
+	if (0 == name.size() || !image)
+		return 0;
+
+	ITexture* t = 0;
+
+	core::array<IImage*> imageArray(1);
+	imageArray.push_back(image);
+
+	if (checkImage(imageArray))
+	{
+		t = createDeviceDependentTexture(name, image);
+	}
+
+	if (t)
+	{
+		addTexture(t);
+		t->drop();
+	}
+
+	return t;
+}
+
+ITexture* CNullDriver::addTextureCubemap(const io::path& name, IImage* imagePosX, IImage* imageNegX, IImage* imagePosY,
+	IImage* imageNegY, IImage* imagePosZ, IImage* imageNegZ)
+{
+	if (0 == name.size() || !imagePosX || !imageNegX || !imagePosY || !imageNegY || !imagePosZ || !imageNegZ)
+		return 0;
+
+	ITexture* t = 0;
+
+	core::array<IImage*> imageArray(6);
+	imageArray.push_back(imagePosX);
+	imageArray.push_back(imageNegX);
+	imageArray.push_back(imagePosY);
+	imageArray.push_back(imageNegY);
+	imageArray.push_back(imagePosZ);
+	imageArray.push_back(imageNegZ);
+
+	if (checkImage(imageArray))
+	{
+		t = createDeviceDependentTextureCubemap(name, imageArray);
+	}
+
+	if (t)
+	{
+		addTexture(t);
+		t->drop();
+	}
+
+	return t;
+}
+
 
 //! loads a Texture
 ITexture* CNullDriver::getTexture(const io::path& filename)
@@ -526,14 +614,37 @@ ITexture* CNullDriver::getTexture(io::IReadFile* file)
 video::ITexture* CNullDriver::loadTextureFromFile(io::IReadFile* file, const io::path& hashName )
 {
 	ITexture* texture = 0;
-	IImage* image = createImageFromFile(file);
 
-	if (image)
+	E_TEXTURE_TYPE type = ETT_2D;
+
+	core::array<IImage*> imageArray = createImagesFromFile(file, &type);
+
+	if (checkImage(imageArray))
 	{
-		// create texture from surface
-		texture = createDeviceDependentTexture(image, hashName.size() ? hashName : file->getFileName() );
-		os::Printer::log("Loaded texture", file->getFileName());
-		image->drop();
+		switch (type)
+		{
+		case ETT_2D:
+			texture = createDeviceDependentTexture(hashName.size() ? hashName : file->getFileName(), imageArray[0]);
+			break;
+		case ETT_CUBEMAP:
+			if (imageArray.size() >= 6 && imageArray[0] && imageArray[1] && imageArray[2] && imageArray[3] && imageArray[4] && imageArray[5])
+			{
+				texture = createDeviceDependentTextureCubemap(hashName.size() ? hashName : file->getFileName(), imageArray);
+			}
+			break;
+		default:
+			_IRR_DEBUG_BREAK_IF(true);
+			break;
+		}
+
+		if (texture)
+			os::Printer::log("Loaded texture", file->getFileName());
+	}
+
+	for (u32 i = 0; i < imageArray.size(); ++i)
+	{
+		if (imageArray[i])
+			imageArray[i]->drop();
 	}
 
 	return texture;
@@ -565,7 +676,7 @@ void CNullDriver::addTexture(video::ITexture* texture)
 video::ITexture* CNullDriver::findTexture(const io::path& filename)
 {
 	SSurface s;
-	SDummyTexture dummy(filename);
+	SDummyTexture dummy(filename, ETT_2D);
 	s.Surface = &dummy;
 
 	s32 index = Textures.binary_search(s);
@@ -575,65 +686,22 @@ video::ITexture* CNullDriver::findTexture(const io::path& filename)
 	return 0;
 }
 
-
-//! Creates a texture from a loaded IImage.
-ITexture* CNullDriver::addTexture(const io::path& name, IImage* image, void* mipmapData)
+ITexture* CNullDriver::createDeviceDependentTexture(const io::path& name, IImage* image)
 {
-	if ( 0 == name.size() || !image)
-		return 0;
-
-	ITexture* t = createDeviceDependentTexture(image, name, mipmapData);
-	if (t)
-	{
-		addTexture(t);
-		t->drop();
-	}
-	return t;
+	return new SDummyTexture(name, ETT_2D);
 }
 
-
-//! creates a Texture
-ITexture* CNullDriver::addTexture(const core::dimension2d<u32>& size,
-				  const io::path& name, ECOLOR_FORMAT format)
+ITexture* CNullDriver::createDeviceDependentTextureCubemap(const io::path& name, const core::array<IImage*>& image)
 {
-	if(IImage::isRenderTargetOnlyFormat(format))
-	{
-		os::Printer::log("Could not create ITexture, format only supported for render target textures.", ELL_WARNING);
-		return 0;
-	}
-
-	if ( 0 == name.size () )
-		return 0;
-
-	IImage* image = new CImage(format, size);
-	ITexture* t = createDeviceDependentTexture(image, name);
-	image->drop();
-	addTexture(t);
-
-	if (t)
-		t->drop();
-
-	return t;
+	return new SDummyTexture(name, ETT_CUBEMAP);
 }
 
-
-
-//! returns a device dependent texture from a software surface (IImage)
-//! THIS METHOD HAS TO BE OVERRIDDEN BY DERIVED DRIVERS WITH OWN TEXTURES
-ITexture* CNullDriver::createDeviceDependentTexture(IImage* surface, const io::path& name, void* mipmapData)
-{
-	return new SDummyTexture(name);
-}
-
-
-//! set a render target
-bool CNullDriver::setRenderTarget(IRenderTarget* target, const core::array<u32>& activeTextureID, bool clearBackBuffer,
-	bool clearDepthBuffer, bool clearStencilBuffer, SColor clearColor)
+bool CNullDriver::setRenderTargetEx(IRenderTarget* target, u16 clearFlag, SColor clearColor, f32 clearDepth, u8 clearStencil)
 {
 	return false;
 }
 
-bool CNullDriver::setRenderTarget(video::ITexture* texture, bool clearBackBuffer, bool clearZBuffer, SColor color)
+bool CNullDriver::setRenderTarget(ITexture* texture, u16 clearFlag, SColor clearColor, f32 clearDepth, u8 clearStencil)
 {
 	if (texture)
 	{
@@ -663,11 +731,11 @@ bool CNullDriver::setRenderTarget(video::ITexture* texture, bool clearBackBuffer
 
 		SharedRenderTarget->setTexture(texture, depthTexture);
 
-		return IVideoDriver::setRenderTarget(SharedRenderTarget, 0, clearBackBuffer, clearZBuffer, clearZBuffer, color);
+		return setRenderTargetEx(SharedRenderTarget, clearFlag, clearColor, clearDepth, clearStencil);
 	}
 	else
 	{
-		return IVideoDriver::setRenderTarget(NULL, 0, clearBackBuffer, clearZBuffer, false, color);
+		return setRenderTargetEx(0, clearFlag, clearColor, clearDepth, clearStencil);
 	}
 }
 
@@ -917,11 +985,12 @@ IRenderTarget* CNullDriver::getCurrentRenderTarget() const
 }
 
 
-//! returns the current render target size,
-//! or the screen size if render targets are not implemented
 const core::dimension2d<u32>& CNullDriver::getCurrentRenderTargetSize() const
 {
-	return ScreenSize;
+	if (CurrentRenderTargetSize.Width == 0)
+		return ScreenSize;
+	else
+		return CurrentRenderTargetSize;
 }
 
 
@@ -1318,6 +1387,92 @@ bool CNullDriver::checkPrimitiveCount(u32 prmCount) const
 	return true;
 }
 
+bool CNullDriver::checkImage(const core::array<IImage*>& image) const
+{
+	bool status = true;
+
+	if (image.size() > 0)
+	{
+		ECOLOR_FORMAT lastFormat = image[0]->getColorFormat();
+		core::dimension2d<u32> lastSize = image[0]->getDimension();
+
+		for (u32 i = 0; i < image.size() && status; ++i)
+		{
+			ECOLOR_FORMAT format = image[i]->getColorFormat();
+			core::dimension2d<u32> size = image[i]->getDimension();
+
+			switch (format)
+			{
+			case ECF_DXT1:
+			case ECF_DXT2:
+			case ECF_DXT3:
+			case ECF_DXT4:
+			case ECF_DXT5:
+				if (!queryFeature(EVDF_TEXTURE_COMPRESSED_DXT))
+				{
+					os::Printer::log("DXT texture compression not available.", ELL_ERROR);
+					status = false;
+				}
+				else if (size.getOptimalSize(true, false) != size)
+				{
+					os::Printer::log("Invalid size of image for DXT texture, size of image must be power of two.", ELL_ERROR);
+					status = false;
+				}
+				break;
+			case ECF_PVRTC_RGB2:
+			case ECF_PVRTC_ARGB2:
+			case ECF_PVRTC_RGB4:
+			case ECF_PVRTC_ARGB4:
+				if (!queryFeature(EVDF_TEXTURE_COMPRESSED_PVRTC))
+				{
+					os::Printer::log("PVRTC texture compression not available.", ELL_ERROR);
+					status = false;
+				}
+				else if (size.getOptimalSize(true, false) != size)
+				{
+					os::Printer::log("Invalid size of image for PVRTC compressed texture, size of image must be power of two and squared.", ELL_ERROR);
+					status = false;
+				}
+				break;
+			case ECF_PVRTC2_ARGB2:
+			case ECF_PVRTC2_ARGB4:
+				if (!queryFeature(EVDF_TEXTURE_COMPRESSED_PVRTC2))
+				{
+					os::Printer::log("PVRTC2 texture compression not available.", ELL_ERROR);
+					status = false;
+				}
+				break;
+			case ECF_ETC1:
+				if (!queryFeature(EVDF_TEXTURE_COMPRESSED_ETC1))
+				{
+					os::Printer::log("ETC1 texture compression not available.", ELL_ERROR);
+					status = false;
+				}
+				break;
+			case ECF_ETC2_RGB:
+			case ECF_ETC2_ARGB:
+				if (!queryFeature(EVDF_TEXTURE_COMPRESSED_ETC2))
+				{
+					os::Printer::log("ETC2 texture compression not available.", ELL_ERROR);
+					status = false;
+				}
+				break;
+			default:
+				break;
+			}
+
+			if (format != lastFormat || size != lastSize)
+				status = false;
+		}
+	}
+	else
+	{
+		status = false;
+	}
+
+	return status;
+}
+
 //! Enables or disables a texture creation flag.
 void CNullDriver::setTextureCreationFlag(E_TEXTURE_CREATION_FLAG flag, bool enabled)
 {
@@ -1343,66 +1498,87 @@ bool CNullDriver::getTextureCreationFlag(E_TEXTURE_CREATION_FLAG flag) const
 	return (TextureCreationFlags & flag)!=0;
 }
 
-
-//! Creates a software image from a file.
-IImage* CNullDriver::createImageFromFile(const io::path& filename)
+core::array<IImage*> CNullDriver::createImagesFromFile(const io::path& filename, E_TEXTURE_TYPE* type)
 {
-	if (!filename.size())
-		return 0;
+	// TO-DO -> use 'move' feature from C++11 standard.
 
-	IImage* image = 0;
-	io::IReadFile* file = FileSystem->createAndOpenFile(filename);
+	core::array<IImage*> imageArray;
+
+	if (filename.size() > 0)
+	{
+		io::IReadFile* file = FileSystem->createAndOpenFile(filename);
+
+		if (file)
+		{
+			imageArray = createImagesFromFile(file, type);
+			file->drop();
+		}
+		else
+			os::Printer::log("Could not open file of image", filename, ELL_WARNING);
+	}
+
+	return imageArray;
+}
+
+core::array<IImage*> CNullDriver::createImagesFromFile(io::IReadFile* file, E_TEXTURE_TYPE* type)
+{
+	// TO-DO -> use 'move' feature from C++11 standard.
+
+	core::array<IImage*> imageArray;
 
 	if (file)
 	{
-		image = createImageFromFile(file);
-		file->drop();
-	}
-	else
-		os::Printer::log("Could not open file of image", filename, ELL_WARNING);
+		s32 i;
 
-	return image;
-}
-
-
-//! Creates a software image from a file.
-IImage* CNullDriver::createImageFromFile(io::IReadFile* file)
-{
-	if (!file)
-		return 0;
-
-	IImage* image = 0;
-
-	s32 i;
-
-	// try to load file based on file extension
-	for (i=SurfaceLoader.size()-1; i>=0; --i)
-	{
-		if (SurfaceLoader[i]->isALoadableFileExtension(file->getFileName()))
+		// try to load file based on file extension
+		for (i = SurfaceLoader.size() - 1; i >= 0; --i)
 		{
-			// reset file position which might have changed due to previous loadImage calls
+			if (SurfaceLoader[i]->isALoadableFileExtension(file->getFileName()))
+			{
+				// reset file position which might have changed due to previous loadImage calls
+				file->seek(0);
+				imageArray = SurfaceLoader[i]->loadImages(file, type);
+
+				if (imageArray.size() == 0)
+				{
+					file->seek(0);
+					IImage* image = SurfaceLoader[i]->loadImage(file);
+
+					if (image)
+						imageArray.push_back(image);
+				}
+
+				if (imageArray.size() > 0)
+					return imageArray;
+			}
+		}
+
+		// try to load file based on what is in it
+		for (i = SurfaceLoader.size() - 1; i >= 0; --i)
+		{
+			// dito
 			file->seek(0);
-			image = SurfaceLoader[i]->loadImage(file);
-			if (image)
-				return image;
+			if (SurfaceLoader[i]->isALoadableFileFormat(file))
+			{
+				file->seek(0);
+				imageArray = SurfaceLoader[i]->loadImages(file, type);
+
+				if (imageArray.size() == 0)
+				{
+					file->seek(0);
+					IImage* image = SurfaceLoader[i]->loadImage(file);
+
+					if (image)
+						imageArray.push_back(image);
+				}
+
+				if (imageArray.size() > 0)
+					return imageArray;
+			}
 		}
 	}
 
-	// try to load file based on what is in it
-	for (i=SurfaceLoader.size()-1; i>=0; --i)
-	{
-		// dito
-		file->seek(0);
-		if (SurfaceLoader[i]->isALoadableFileFormat(file))
-		{
-			file->seek(0);
-			image = SurfaceLoader[i]->loadImage(file);
-			if (image)
-				return image;
-		}
-	}
-
-	return 0; // failed to load
+	return imageArray;
 }
 
 
@@ -1440,9 +1616,8 @@ bool CNullDriver::writeImageToFile(IImage* image, io::IWriteFile * file, u32 par
 
 //! Creates a software image from a byte array.
 IImage* CNullDriver::createImageFromData(ECOLOR_FORMAT format,
-					const core::dimension2d<u32>& size,
-					void *data, bool ownForeignMemory,
-					bool deleteMemory)
+	const core::dimension2d<u32>& size, void *data, bool ownForeignMemory,
+	bool deleteMemory)
 {
 	if(IImage::isRenderTargetOnlyFormat(format))
 	{
@@ -1498,7 +1673,7 @@ IImage* CNullDriver::createImage(ITexture* texture, const core::position2d<s32>&
 {
 	if ((pos==core::position2di(0,0)) && (size == texture->getSize()))
 	{
-		IImage* image = new CImage(texture->getColorFormat(), size, texture->lock(ETLM_READ_ONLY), false);
+		IImage* image = new CImage(texture->getColorFormat(), size, texture->lock(ETLM_READ_ONLY), false, false);
 		texture->unlock();
 		return image;
 	}
@@ -1517,7 +1692,7 @@ IImage* CNullDriver::createImage(ITexture* texture, const core::position2d<s32>&
 		if (!src)
 			return 0;
 		IImage* image = new CImage(texture->getColorFormat(), clamped.getSize());
-		u8* dst = static_cast<u8*>(image->lock());
+		u8* dst = static_cast<u8*>(image->getData());
 		src += clamped.UpperLeftCorner.Y * texture->getPitch() + image->getBytesPerPixel() * clamped.UpperLeftCorner.X;
 		for (u32 i=0; i<clamped.getHeight(); ++i)
 		{
@@ -1525,7 +1700,6 @@ IImage* CNullDriver::createImage(ITexture* texture, const core::position2d<s32>&
 			src += texture->getPitch();
 			dst += image->getPitch();
 		}
-		image->unlock();
 		texture->unlock();
 		return image;
 	}
@@ -1962,6 +2136,9 @@ io::IAttributes* CNullDriver::createAttributesFromMaterial(const video::SMateria
 	prefix="TextureWrapV";
 	for (i=0; i<MATERIAL_MAX_TEXTURES; ++i)
 		attr->addEnum((prefix+core::stringc(i+1)).c_str(), material.TextureLayer[i].TextureWrapV, aTextureClampNames);
+	prefix="TextureWrapW";
+	for (i=0; i<MATERIAL_MAX_TEXTURES; ++i)
+		attr->addEnum((prefix+core::stringc(i+1)).c_str(), material.TextureLayer[i].TextureWrapW, aTextureClampNames);
 	prefix="LODBias";
 	for (i=0; i<MATERIAL_MAX_TEXTURES; ++i)
 		attr->addInt((prefix+core::stringc(i+1)).c_str(), material.TextureLayer[i].LODBias);
@@ -2051,6 +2228,7 @@ void CNullDriver::fillMaterialStructureFromAttributes(video::SMaterial& outMater
 		{
 			outMaterial.TextureLayer[i].TextureWrapU = (E_TEXTURE_CLAMP)attr->getAttributeAsEnumeration((prefix+core::stringc(i+1)).c_str(), aTextureClampNames);
 			outMaterial.TextureLayer[i].TextureWrapV = outMaterial.TextureLayer[i].TextureWrapU;
+			outMaterial.TextureLayer[i].TextureWrapW = outMaterial.TextureLayer[i].TextureWrapW;
 		}
 	}
 	else
@@ -2059,6 +2237,9 @@ void CNullDriver::fillMaterialStructureFromAttributes(video::SMaterial& outMater
 		{
 			outMaterial.TextureLayer[i].TextureWrapU = (E_TEXTURE_CLAMP)attr->getAttributeAsEnumeration((prefix+"U"+core::stringc(i+1)).c_str(), aTextureClampNames);
 			outMaterial.TextureLayer[i].TextureWrapV = (E_TEXTURE_CLAMP)attr->getAttributeAsEnumeration((prefix+"V"+core::stringc(i+1)).c_str(), aTextureClampNames);
+
+			if (attr->existsAttribute((prefix+"W"+core::stringc(i+1)).c_str())) // legacy
+				outMaterial.TextureLayer[i].TextureWrapW = (E_TEXTURE_CLAMP)attr->getAttributeAsEnumeration((prefix+"W"+core::stringc(i+1)).c_str(), aTextureClampNames);
 		}
 	}
 
@@ -2410,15 +2591,7 @@ ITexture* CNullDriver::addRenderTargetTexture(const core::dimension2d<u32>& size
 	return 0;
 }
 
-
-//! Clear the color, depth and/or stencil buffers.
-void CNullDriver::clearBuffers(bool backBuffer, bool depthBuffer, bool stencilBuffer, SColor color)
-{
-}
-
-
-//! Clears the ZBuffer.
-void CNullDriver::clearZBuffer()
+void CNullDriver::clearBuffers(u16 flag, SColor color, f32 depth, u8 stencil)
 {
 }
 

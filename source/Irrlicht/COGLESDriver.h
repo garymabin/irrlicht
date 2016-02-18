@@ -2,8 +2,8 @@
 // This file is part of the "Irrlicht Engine".
 // For conditions of distribution and use, see copyright notice in Irrlicht.h
 
-#ifndef __C_OGLES_DRIVER_H_INCLUDED__
-#define __C_OGLES_DRIVER_H_INCLUDED__
+#ifndef __C_OGLES1_DRIVER_H_INCLUDED__
+#define __C_OGLES1_DRIVER_H_INCLUDED__
 
 #include "IrrCompileConfig.h"
 
@@ -15,45 +15,40 @@
 #include "IMaterialRendererServices.h"
 #include "EDriverFeatures.h"
 #include "fast_atof.h"
+#include "COGLESExtensionHandler.h"
 #include "IContextManager.h"
 
-#ifdef _MSC_VER
-	#pragma comment(lib, "libgles_cm.lib")
+#if defined(_IRR_WINDOWS_API_)
+// include windows headers for HWND
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
 #endif
 
-#include "COGLESExtensionHandler.h"
+#ifdef _MSC_VER
+#pragma comment(lib, "libGLES_CM.lib")
+#endif
 
 namespace irr
 {
 namespace video
 {
-	class COGLES1CallBridge;
-	class COGLES1Texture;
 
 	class COGLES1Driver : public CNullDriver, public IMaterialRendererServices, public COGLES1ExtensionHandler
 	{
-		friend class COGLES1Texture;
+		friend class COpenGLCoreTexture<COGLES1Driver>;
+
 	public:
 		//! constructor
-		COGLES1Driver(const SIrrlichtCreationParameters& params,
-				io::IFileSystem* io
-#if defined(_IRR_COMPILE_WITH_X11_DEVICE_) || defined(_IRR_WINDOWS_API_) || defined(_IRR_COMPILE_WITH_ANDROID_DEVICE_) || defined(_IRR_COMPILE_WITH_FB_DEVICE_)
-                , IContextManager* contextManager
-#elif defined(_IRR_COMPILE_WITH_IPHONE_DEVICE_)
-                , CIrrDeviceIPhone* device
-#endif
-                );
+		COGLES1Driver(const SIrrlichtCreationParameters& params, io::IFileSystem* io, IContextManager* contextManager);
 
 		//! destructor
 		virtual ~COGLES1Driver();
 
-		//! clears the zbuffer
-		virtual bool beginScene(bool backBuffer=true, bool zBuffer=true,
-				SColor color=SColor(255,0,0,0),
-				const SExposedVideoData& videoData=SExposedVideoData(),
-				core::rect<s32>* sourceRect=0) _IRR_OVERRIDE_;
+		virtual bool beginScene(u16 clearFlag, SColor clearColor = SColor(255, 0, 0, 0), f32 clearDepth = 1.f, u8 clearStencil = 0,
+			const SExposedVideoData& videoData = SExposedVideoData(), core::rect<s32>* sourceRect = 0) _IRR_OVERRIDE_;
 
-		//! presents the rendered scene on the screen, returns false if failed
 		virtual bool endScene() _IRR_OVERRIDE_;
 
 		//! sets transformation
@@ -87,6 +82,8 @@ namespace video
 		//! Draw hardware buffer
 		virtual void drawHardwareBuffer(SHWBufferLink *HWBuffer) _IRR_OVERRIDE_;
 
+		virtual IRenderTarget* addRenderTarget() _IRR_OVERRIDE_;
+
 		//! draws a vertex primitive list
 		virtual void drawVertexPrimitiveList(const void* vertices, u32 vertexCount,
 				const void* indexList, u32 primitiveCount,
@@ -104,10 +101,15 @@ namespace video
 		//! Sets a material.
 		virtual void setMaterial(const SMaterial& material) _IRR_OVERRIDE_;
 
-		//! draws an 2d image, using a color (if color is other then Color(255,255,255,255)) and the alpha channel of the texture if wanted.
 		virtual void draw2DImage(const video::ITexture* texture, const core::position2d<s32>& destPos,
 			const core::rect<s32>& sourceRect, const core::rect<s32>* clipRect = 0,
-			SColor color=SColor(255,255,255,255), bool useAlphaChannelOfTexture=false) _IRR_OVERRIDE_;
+			SColor color = SColor(255, 255, 255, 255), bool useAlphaChannelOfTexture = false) _IRR_OVERRIDE_;
+
+		virtual void draw2DImage(const video::ITexture* texture, const core::rect<s32>& destRect,
+			const core::rect<s32>& sourceRect, const core::rect<s32>* clipRect = 0,
+			const video::SColor* const colors = 0, bool useAlphaChannelOfTexture = false) _IRR_OVERRIDE_;
+
+		virtual void draw2DImage(const video::ITexture* texture, bool flip);
 
 		//! draws a set of 2d images
 		virtual void draw2DImageBatch(const video::ITexture* texture,
@@ -125,11 +127,6 @@ namespace video
 				const core::rect<s32>* clipRect=0,
 				SColor color=SColor(255,255,255,255),
 				bool useAlphaChannelOfTexture=false) _IRR_OVERRIDE_;
-
-		//! Draws a part of the texture into the rectangle.
-		virtual void draw2DImage(const video::ITexture* texture, const core::rect<s32>& destRect,
-			const core::rect<s32>& sourceRect, const core::rect<s32>* clipRect = 0,
-			const video::SColor* const colors=0, bool useAlphaChannelOfTexture=false) _IRR_OVERRIDE_;
 
 		//! draw an 2d rectangle
 		virtual void draw2DRectangle(SColor color, const core::rect<s32>& pos,
@@ -206,6 +203,9 @@ namespace video
 		virtual void setBasicRenderStates(const SMaterial& material, const SMaterial& lastmaterial,
 			bool resetAllRenderstates) _IRR_OVERRIDE_;
 
+		//! Compare in SMaterial doesn't check texture parameters, so we should call this on each OnRender call.
+		virtual void setTextureRenderStates(const SMaterial& material, bool resetAllRenderstates);
+
 		//! Get a vertex shader constant index.
 		virtual s32 getVertexShaderConstantID(const c8* name) _IRR_OVERRIDE_;
 
@@ -230,12 +230,6 @@ namespace video
 		//! Sets a pixel shader constant.
 		virtual void setPixelShaderConstant(const f32* data, s32 startRegister, s32 constantAmount=1) _IRR_OVERRIDE_;
 
-		//! sets the current Texture
-		bool setActiveTexture(u32 stage, const video::ITexture* texture);
-
-		//! disables all textures beginning with fromStage.
-		bool disableTextures(u32 fromStage=0);
-
 		//! Adds a new material renderer to the VideoDriver
 		virtual s32 addShaderMaterial(const c8* vertexShaderProgram, const c8* pixelShaderProgram,
 			IShaderConstantSetCallBack* callback, E_MATERIAL_TYPE baseMaterial, s32 userData) _IRR_OVERRIDE_;
@@ -255,15 +249,15 @@ namespace video
 		virtual IVideoDriver* getVideoDriver() _IRR_OVERRIDE_;
 
 		//! Returns the maximum amount of primitives
-		virtual u32 getMaximalPrimitiveCount() const;
+		virtual u32 getMaximalPrimitiveCount() const _IRR_OVERRIDE_;
 
 		virtual ITexture* addRenderTargetTexture(const core::dimension2d<u32>& size,
-				const io::path& name, const ECOLOR_FORMAT format = ECF_UNKNOWN) _IRR_OVERRIDE_;
-		virtual bool setRenderTarget(video::ITexture* texture, bool clearBackBuffer,
-					bool clearZBuffer, SColor color) _IRR_OVERRIDE_;
+			const io::path& name, const ECOLOR_FORMAT format = ECF_UNKNOWN) _IRR_OVERRIDE_;
 
-		//! Clears the ZBuffer.
-		virtual void clearZBuffer() _IRR_OVERRIDE_;
+		virtual bool setRenderTargetEx(IRenderTarget* target, u16 clearFlag, SColor clearColor = SColor(255, 0, 0, 0),
+			f32 clearDepth = 1.f, u8 clearStencil = 0) _IRR_OVERRIDE_;
+
+		virtual void clearBuffers(u16 flag, SColor color = SColor(255, 0, 0, 0), f32 depth = 1.f, u8 stencil = 0) _IRR_OVERRIDE_;
 
 		//! Returns an image created from the last rendered frame.
 		virtual IImage* createScreenShot(video::ECOLOR_FORMAT format=video::ECF_UNKNOWN, video::E_RENDER_TARGET target=video::ERT_FRAME_BUFFER) _IRR_OVERRIDE_;
@@ -284,99 +278,34 @@ namespace video
 		}
 
 		//! Get the maximal texture size for this driver
-		core::dimension2du getMaxTextureSize() const;
+		core::dimension2du getMaxTextureSize() const _IRR_OVERRIDE_;
 
-		ITexture* createDepthTexture(ITexture* texture, bool shared=true);
-		void removeDepthTexture(ITexture* texture);
-
-		void removeTexture(ITexture* texture);
+		void removeTexture(ITexture* texture) _IRR_OVERRIDE_;
 
 		//! Convert E_BLEND_FACTOR to OpenGL equivalent
 		GLenum getGLBlend(E_BLEND_FACTOR factor) const;
 
-		//! Get bridge calls.
-		COGLES1CallBridge* getBridgeCalls() const;
+		//! Get ZBuffer bits.
+		GLenum getZBufferBits() const;
+
+		void getColorFormatParameters(ECOLOR_FORMAT format, GLint& internalFormat, GLenum& pixelFormat,
+			GLenum& pixelType, void(**converter)(const void*, s32, void*));
+
+		COGLES1CacheHandler* getCacheHandler() const;
 
 	private:
-
-		class STextureStageCache
-		{
-		public:
-			STextureStageCache()
-			{
-				for (u32 i = 0; i < MATERIAL_MAX_TEXTURES; ++i)
-					CurrentTexture[i] = 0;
-			}
-
-			~STextureStageCache()
-			{
-				clear();
-			}
-
-			void set(u32 stage, const ITexture* tex)
-			{
-				if (stage < MATERIAL_MAX_TEXTURES)
-				{
-					const ITexture* oldTexture = CurrentTexture[stage];
-
-					if (tex)
-						tex->grab();
-
-					CurrentTexture[stage] = tex;
-
-					if (oldTexture)
-						oldTexture->drop();
-				}
-			}
-
-			const ITexture* operator[](int stage) const
-			{
-				if ((u32)stage < MATERIAL_MAX_TEXTURES)
-					return CurrentTexture[stage];
-				else
-					return 0;
-			}
-
-			void remove(ITexture* tex)
-			{
-				for (s32 i = MATERIAL_MAX_TEXTURES-1; i>= 0; --i)
-				{
-					if (CurrentTexture[i] == tex)
-					{
-						tex->drop();
-						CurrentTexture[i] = 0;
-					}
-				}
-			}
-
-			void clear()
-			{
-				for (u32 i = 0; i < MATERIAL_MAX_TEXTURES; ++i)
-				{
-					if (CurrentTexture[i])
-					{
-						CurrentTexture[i]->drop();
-						CurrentTexture[i] = 0;
-					}
-				}
-			}
-
-		private:
-			const ITexture* CurrentTexture[MATERIAL_MAX_TEXTURES];
-		};
-
 		void uploadClipPlane(u32 index);
 
 		//! inits the opengl-es driver
 		bool genericDriverInit(const core::dimension2d<u32>& screenSize, bool stencilBuffer);
 
-		//! returns a device dependent texture from a software surface (IImage)
-		virtual video::ITexture* createDeviceDependentTexture(IImage* surface, const io::path& name, void* mipmapData=0) _IRR_OVERRIDE_;
+		virtual ITexture* createDeviceDependentTexture(const io::path& name, IImage* image) _IRR_OVERRIDE_;
+
+		virtual ITexture* createDeviceDependentTextureCubemap(const io::path& name, const core::array<IImage*>& image) _IRR_OVERRIDE_;
 
 		//! creates a transposed matrix in supplied GLfloat array to pass to OGLES1
-		inline void createGLMatrix(GLfloat gl_matrix[16], const core::matrix4& m);
-
-		inline void createGLTextureMatrix(GLfloat gl_matrix[16], const core::matrix4& m);
+		inline void getGLMatrix(GLfloat gl_matrix[16], const core::matrix4& m);
+		inline void getGLTextureMatrix(GLfloat gl_matrix[16], const core::matrix4& m);
 
 		//! Set GL pipeline to desired texture wrap modes of the material
 		void setWrapMode(const SMaterial& material);
@@ -390,15 +319,14 @@ namespace video
 		//! sets the needed renderstates
 		void setRenderStates2DMode(bool alpha, bool texture, bool alphaChannel);
 
-		// returns the current size of the screen or rendertarget
-		virtual const core::dimension2d<u32>& getCurrentRenderTargetSize() const _IRR_OVERRIDE_;
-
 		void createMaterialRenderers();
 
 		//! Assign a hardware light to the specified requested light, if any
 		//! free hardware lights exist.
 		//! \param[in] lightIndex: the index of the requesting light
 		void assignHardwareLight(u32 lightIndex);
+
+		COGLES1CacheHandler* CacheHandler;
 
 		core::stringw Name;
 		core::matrix4 Matrices[ETS_COUNT];
@@ -419,13 +347,8 @@ namespace video
 		u8 AntiAlias;
 
 		SMaterial Material, LastMaterial;
-		COGLES1Texture* RenderTargetTexture;
-		STextureStageCache CurrentTexture;
-		core::array<ITexture*> DepthTextures;
 		core::array<core::plane3df> UserClipPlane;
 		core::array<bool> UserClipPlaneEnabled;
-
-		core::dimension2d<u32> CurrentRendertargetSize;
 
 		core::stringc VendorName;
 
@@ -433,6 +356,8 @@ namespace video
 
 		//! Color buffer format
 		ECOLOR_FORMAT ColorFormat;
+
+		SIrrlichtCreationParameters Params;
 
 		//! All the lights that have been requested; a hardware limited
 		//! number of them will be used at once.
@@ -447,51 +372,12 @@ namespace video
 		};
 		core::array<RequestedLight> RequestedLights;
 
-		COGLES1CallBridge* BridgeCalls;
-
-#if defined(_IRR_COMPILE_WITH_IPHONE_DEVICE_)
-		CIrrDeviceIPhone* Device;
-		GLuint ViewFramebuffer;
-		GLuint ViewRenderbuffer;
-		GLuint ViewDepthRenderbuffer;
-#elif defined(_IRR_COMPILE_WITH_X11_DEVICE_) || defined(_IRR_WINDOWS_API_) || defined(_IRR_COMPILE_WITH_ANDROID_DEVICE_) || defined(_IRR_COMPILE_WITH_FB_DEVICE_)
-        IContextManager* ContextManager;
-#endif
-	};
-
-	//! This bridge between Irrlicht pseudo OpenGL ES1.x calls
-	//! and true OpenGL ES1.x calls.
-
-	class COGLES1CallBridge
-	{
-	public:
-		COGLES1CallBridge(COGLES1Driver* driver);
-
-		// Blending calls.
-
-		void setBlendEquation(GLenum mode);
-
-		void setBlendFunc(GLenum source, GLenum destination);
-
-		void setBlendFuncSeparate(GLenum sourceRGB, GLenum destinationRGB, GLenum sourceAlpha, GLenum destinationAlpha);
-
-		void setBlend(bool enable);
-
-	private:
-		COGLES1Driver* Driver;
-
-		GLenum BlendEquation;
-		GLenum BlendSourceRGB;
-		GLenum BlendDestinationRGB;
-		GLenum BlendSourceAlpha;
-		GLenum BlendDestinationAlpha;
-		bool Blend;
+		IContextManager* ContextManager;
 	};
 
 } // end namespace video
 } // end namespace irr
 
+#endif // _IRR_COMPILE_WITH_OGLES1_
 
-#endif // _IRR_COMPILE_WITH_OPENGL_
 #endif
-

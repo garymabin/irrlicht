@@ -129,8 +129,8 @@ void CGUIContextMenu::setSubMenu(u32 index, CGUIContextMenu* menu)
 	if (index >= Items.size())
 		return;
 
-    if (menu)
-        menu->grab();
+	if (menu)
+		menu->grab();
 	if (Items[index].SubMenu)
 		Items[index].SubMenu->drop();
 
@@ -201,11 +201,9 @@ bool CGUIContextMenu::isItemEnabled(u32 idx) const
 {
 	if (idx >= Items.size())
 	{
-		_IRR_IMPLEMENT_MANAGED_MARSHALLING_BUGFIX;
 		return false;
 	}
 
-	_IRR_IMPLEMENT_MANAGED_MARSHALLING_BUGFIX;
 	return Items[idx].Enabled;
 }
 
@@ -215,11 +213,9 @@ bool CGUIContextMenu::isItemChecked(u32 idx) const
 {
 	if (idx >= Items.size())
 	{
-		_IRR_IMPLEMENT_MANAGED_MARSHALLING_BUGFIX;
 		return false;
 	}
 
-	_IRR_IMPLEMENT_MANAGED_MARSHALLING_BUGFIX;
 	return Items[idx].Checked;
 }
 

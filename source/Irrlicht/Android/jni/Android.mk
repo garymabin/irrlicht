@@ -6,7 +6,7 @@ include $(CLEAR_VARS)
 LOCAL_MODULE := Irrlicht
 IRRLICHT_LIB_NAME := lib$(LOCAL_MODULE).a
 
-LOCAL_CFLAGS := -D_IRR_ANDROID_PLATFORM_ -Wall -pipe -fno-exceptions -fno-rtti -fstrict-aliasing
+LOCAL_CFLAGS := -Wall -pipe -fno-exceptions -fno-rtti -fstrict-aliasing
 
 ifndef NDEBUG
 LOCAL_CFLAGS += -g -D_DEBUG
@@ -37,6 +37,7 @@ LOCAL_SRC_FILES := \
 					CAnimatedMeshSceneNode.cpp \
 					CAttributes.cpp \
 					CB3DMeshFileLoader.cpp \
+					CB3DMeshWriter.cpp \
 					CBillboardSceneNode.cpp \
 					CBoneSceneNode.cpp \
 					CBSPMeshFileLoader.cpp \
@@ -47,11 +48,6 @@ LOCAL_SRC_FILES := \
 					CColorConverter.cpp \
 					CCSMLoader.cpp \
 					CCubeSceneNode.cpp \
-					CD3D8Driver.cpp \
-					CD3D8NormalMapRenderer.cpp \
-					CD3D8ParallaxMapRenderer.cpp \
-					CD3D8ShaderMaterialRenderer.cpp \
-					CD3D8Texture.cpp \
 					CD3D9Driver.cpp \
 					CD3D9HLSLMaterialRenderer.cpp \
 					CD3D9NormalMapRenderer.cpp \
@@ -123,7 +119,6 @@ LOCAL_SRC_FILES := \
 					CIrrDeviceSDL.cpp \
 					CIrrDeviceStub.cpp \
 					CIrrDeviceWin32.cpp \
-					CIrrDeviceWinCE.cpp \
 					CIrrMeshFileLoader.cpp \
 					CIrrMeshWriter.cpp \
 					CLightSceneNode.cpp \
@@ -157,18 +152,16 @@ LOCAL_SRC_FILES := \
 					COGLES2NormalMapRenderer.cpp \
 					COGLES2ParallaxMapRenderer.cpp \
 					COGLES2Renderer2D.cpp \
-					COGLES2Texture.cpp \
 					COGLESDriver.cpp \
 					COGLESExtensionHandler.cpp \
-					COGLESTexture.cpp \
 					COgreMeshFileLoader.cpp \
+					COpenGLCacheHandler.cpp \
 					COpenGLDriver.cpp \
 					COpenGLExtensionHandler.cpp \
 					COpenGLNormalMapRenderer.cpp \
 					COpenGLParallaxMapRenderer.cpp \
 					COpenGLShaderMaterialRenderer.cpp \
 					COpenGLSLMaterialRenderer.cpp \
-					COpenGLTexture.cpp \
 					COSOperator.cpp \
 					CPakReader.cpp \
 					CParticleAnimatedMeshSceneNodeEmitter.cpp \
